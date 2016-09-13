@@ -105,3 +105,6 @@ BYTE |  4B    | 47     |   43    |    3F     |   3C     |   38     |   35     | 
 ```
 1000: 10 a8 20 FF 8 c7 5 FF 10 a8 15 FF 25 7e 20 FF 10 63 08 FF 80 63 00 00
 ```
+
+
+This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]
