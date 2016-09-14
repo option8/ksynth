@@ -106,5 +106,11 @@ BYTE |  4B    | 47     |   43    |    3F     |   3C     |   38     |   35     | 
 1000: 10 a8 20 FF 8 c7 5 FF 10 a8 15 FF 25 7e 20 FF 10 63 08 FF 80 63 00 00
 ```
 
+and, of course, the requisite
+##Daisy Bell (Bicycle Built For Two)##
+```
+1000: 30 71 30 86 30 A9 30 e1 10 C9 10 B3 10 A9 20 C9 10 A9 60 e1 30 96 30 71 30 86 30 A9 10 C9 10 B3 10 A9 20 96 10 86 40 96 10 FF 10 86 10 77 10 86
+1030: 10 96 20 71 10 86 10 96 40 A9 10 96 20 86 10 A9 20 C9 10 A9 10 C9 40 e1 10 E1 20 A9 10 86 10 96 20 FF 20 A9 10 86 10 96 10 FF 5 86 5 77 10 71 10 86 10 A9 20 96 10 e1 40 A9 00 00
+```
 
 This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]
