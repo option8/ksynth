@@ -15,13 +15,13 @@ Everything is in this README, since it's small enough to copy and paste into an 
 030D-   EA          NOP			;	wait...
 030E-   EA          NOP			;
 030F-   D0 05       BNE   $0316	;	if X = 0, click. otherwise, skip
-0311-   8D 30 C0    STA   $C030	;	click
+0311-   2C 30 C0    BIT   $C030	;	click
 0314-   A6 FB       LDX   $FB	;	reset X to beginning of countdown
 0316-   C6 FE       DEC   $FE	;	countdown second oscillator, $FE
 0318-   EA          NOP			;	wait...
 0319-   EA          NOP			;
 031A-   D0 07       BNE   $0323	;	if $FE = 0, click. otherwise, skip
-031C-   8D 30 C0    STA   $C030	;	click
+031C-   2C 30 C0    BIT   $C030	;	click
 031F-   A5 FD       LDA   $FD	;	reset $FE to beginning of countdown
 0321-   85 FE       STA   $FE	;
 0323-   88          DEY			;	countdown duration
