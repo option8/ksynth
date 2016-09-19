@@ -126,6 +126,8 @@ Using the above table as a starting point, a MIDI lookup table can be created. M
 
 440hz A is note 69 in MIDI, so byte 69 (0x45) of the KSYNTH lookup table.
 
+By shifting 12 bytes up or down (one octave), a song's range can be easily be changed to fit in KSYNTH's limited range.
+
 ```
   C  C# D  D# E  F  F# G  G# A  A# B
 0 00 00 00 00 00 00 00 00 00 00 00 00 
@@ -144,7 +146,9 @@ Using the above table as a starting point, a MIDI lookup table can be created. M
 
 
 ##MIDI-like Player##
+
 _assumes song src at $1000_
+
 _assumes lookup table src at $1100_
 
 
