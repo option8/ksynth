@@ -3,6 +3,23 @@ Beginnings of a dual tone synthesizer for the Apple II
 
 All the code is in this README, since it's small enough to copy and paste into an emulator for now.
 
+The included DSK file contains the following files:
+
+ *KSYNTH*: The core sound generation routine
+ *KSYNTH.PLAYER*: Basic player routine. Assumes SONG bytes starting at $1000
+ *BFLATSCALE.SONG*: B-Flat scale
+ *VICTORY.SONG*: "Victory" tune from Karateka    
+ *DAISYBELL.SONG*: "Bicylce Built for Two" AKA "Daisy Bell"  
+ *KSYNTH.MIDI*: MIDI-style KSYNTH player routine. Looks up notes from MIDI.LOOKUP instead of raw cycle counts.     
+ *MIDI.LOOKUP*: Lookup table of notes to cycle counts for MIDI style player.     
+ *RANDOMNOTES*: A routine to play random tones with the KSYNTH routine.
+ *MIDI.LOOKUP2*: Alternate MIDI lookup table that covers larger range of tones
+ *TWOTONE.PLAYER*: Slightly better MIDI-style player routine. Start here.
+
+To do: Add MIDI example songs.
+
+
+
 The synth code itself
 
 ##Two Tone Generator##
@@ -190,4 +207,4 @@ _assumes lookup table src at $1100_
 
 
 
-This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]
+This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]*
