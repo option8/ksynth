@@ -4,31 +4,22 @@
 ******************************
 
 * TO DO:
-*  - play current note
+*  X- play current note
 *  - return to Edit note  \
-*  - insert note           > note entry
+*  - insert note           > note entry  - String Inputter - dialog / window?
 *  - delete note          /
+*  - virtual keyboard ?
+*  - up/down note nudging ?  what about duration?
 *  - load
 *  - save
+*  - new
 *  - help
-
-* DEV NOTES - Needed
-* Load/Save
-*  - String Inputter
-*  - P8 load
-*  - P8 save
-*  - Dialog/Window?
+*  - MESSAGES
+*    - on EOF note, "HIT RETURN TO ADD A NOTE HERE"
+*    - on
 
 * Note entry - virtual keyboard / tempo lengths
 
-* Player Vision Callback
-* centeroffset = 3 ; our "active" note
-* For x = 0 to 10
-*  noteToDraw = curnote - centeroffset
-*   if underflow draw blank
-*   if eof draw eof?
-*   if past eof draw blank
-*  drawNote (x, noteToDraw)
 
 
                        org      $2000
@@ -47,6 +38,7 @@ LAYOUT_NOTEDUR_Y       =        13
                        ldy      #>SongSpace
                        jsr      ks_setsong
                        jsr      SetLatch
+
 
                        jsr      DrawMenuBackground
                        jsr      DrawNoteBoard
@@ -86,7 +78,10 @@ MAIN
                        bne      :check_key5
                        jsr      MAINKEY_PLAYNOTE
                        bra      :MAINKEYS
-:check_key5
+:check_key5            cmp #"?"
+                        beq :go_help
+
+:go_help
 :unknown_key           pha
                        GOXY     #19;#1
                        pla
@@ -114,13 +109,13 @@ MAINKEY_RIGHT          lda      _ks_current_note_idx  ;
                        rts
 
 MAINKEY_PLAYNOTE       lda      _ks_current_note_idx
-                        ASL
-                        TAX
-                        jsr ks_get_song_value
-                        sta SongOneNote ; copy note duration
-                        INX
-                        jsr ks_get_song_value
-                        sta SongOneNote+1 ; copy note value
+                       ASL
+                       TAX
+                       jsr      ks_get_song_value
+                       sta      SongOneNote           ; copy note duration
+                       INX
+                       jsr      ks_get_song_value
+                       sta      SongOneNote+1         ; copy note value
 
                        jsr      ks_getsong
                        pha                            ; save A (address part)
@@ -136,16 +131,19 @@ MAINKEY_PLAYNOTE       lda      _ks_current_note_idx
                        jsr      ks_setsong
 
                        rts
-                                                      ; KEY_UPARROW  =                     $8B
-                                                      ; KEY_DNARROW  =                     $8A
-                                                      ; KEY_RTARROW  =                     $95
-                                                      ; KEY_LTARROW  =                     $88
-                                                      ; KEY_ENTER    =                     $8D
-                                                      ; KEY_ESC      =                     $9B
-                                                      ; KEY_TAB      =                     $89
-                                                      ; KEY_DEL      =                     $FF
-                                                      ;
 
+MAINKEY_HELP
+                       jsr      HOME
+                       lda      #HelpScreen1Strs
+                       ldy      #>HelpScreen1Strs
+                       ldx      #00                   ; horiz pos
+                       jsr      PrintStringsX         ; someone should make a XY version ;)
+                       jsr      WaitKey
+
+                       jsr      DrawMenuBackground
+                       jsr      DrawNoteBoard
+
+                       rts
 
 
 SetLatch               lda      #LatchTest
@@ -176,11 +174,12 @@ _ks_current_note_idx   db       0                     ; actual index to note dat
 
 
 
-
 ** THIS DRAWS THE NOTES WHEN EDITING OR PLAYING BACK **
 **
 ** It is not very efficient code and can probably be refactored for
 ** greatly improved code re-use.  Have at it, suckers!  :P
+*
+* Player Vision Callback pseudocode
 *
 * centeroffset = 3 ; our "active" note
 * For x = 0 to 10
@@ -227,7 +226,7 @@ DrawNotes
                        bcs      :draw_me              ; carry gets cleared when underflow, right?
 
 :negative_note                                        ; no need to store A since we aren't working on a real note
-                       jsr      Test_DrawBlank
+                       jsr      DrawBlankNote         ; but draw a blank spot
                        bra      :next_note
 :draw_me                                              ; A should have note to draw
                                                       ;pha
@@ -276,7 +275,7 @@ DrawOneNote
                        stz      _drawing_note_dur
                        stz      _drawing_note_val
                        bra      :now_draw
-:been_done             jmp      Test_DrawBlank        ; THIS WILL POP OUT (RTS) directly from Test_DrawBlank
+:been_done             jmp      DrawBlankNote        ; THIS WILL POP OUT (RTS) directly from DrawBlankNote
 
 :found_note
                        txa
@@ -318,7 +317,7 @@ DrawOneNote
 
                        rts
 
-Test_DrawBlank
+DrawBlankNote
                        ldx      _drawing_note_xpos    ; clear note num
                        ldy      #LAYOUT_NOTENUM_Y
                        jsr      GoXY
@@ -446,7 +445,6 @@ SongSpace              ds       1024
 
 
 
-
 MainMenuStrs
                        asc      "                KSYNTHED  ",8D,8D,00
                        asc      " Song:                    Notes:   /127",00,00
@@ -470,6 +468,35 @@ NoteBoardStrs
                        asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
                        asc      " |___|___|___|___|___|___|___|___|___|`",8D,00
                        asc      "  ``` ``` ``` ``` \\\ ``` ``` ``` ```",8D,00,00
+
+
+HelpScreen1Strs        asc      " _____________  KSYNTHED _____________",8D,00
+                       asc      "| SONG CONTROL KEYS                   |",8D,00
+                       asc      "|                                     |",8D,00
+                       asc      "|  CTRL-P  =  PLAY SONG               |",8D,00
+                       asc      "|  CTRL-L  =  LOAD SONG               |",8D,00
+                       asc      "|  CTRL-S  =  SAVE SONG               |",8D,00
+                       asc      "|  CTRL-N  =  NEW SONG                |",8D,00
+                       asc      "|                                     |",8D,00
+                       asc      "| NOTE EDITOR KEYS                    |",8D,00
+                       asc      "|  L/R ARROW  =  MOVE CURSOR          |",8D,00
+                       asc      "|  SPACEBAR   =  PLAY NOTE            |",8D,00
+                       asc      "|  RETURN     =  EDIT NOTE            |",8D,00
+                       asc      "|  CTRL-I     =  INSERT NOTE          |",8D,00
+                       asc      "|  CTRL-D     =  DELETE NOTE          |",8D,00
+                       asc      "|                                     |",8D,00
+                       asc      "|  H or ?     = HELP SCREEN           |",8D,00
+                       asc      "|_____________________________________|",8D,00,00
+
+* X-                     play     current               note
+*  - return to Edit note  \
+*  - insert note           > note entry
+*  - delete note          /
+*  - virtual keyboard ?
+*  - up/down note nudging ?  what about duration?
+*  - load
+*  - save
+*  - help
 
 
 
