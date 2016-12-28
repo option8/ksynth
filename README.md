@@ -5,17 +5,17 @@ All the code is in this README, since it's small enough to copy and paste into a
 
 The included DSK file contains the following files:
 
- *KSYNTH*: The core sound generation routine
- *KSYNTH.PLAYER*: Basic player routine. Assumes SONG bytes starting at $1000
- *BFLATSCALE.SONG*: B-Flat scale
- *VICTORY.SONG*: "Victory" tune from Karateka    
- *DAISYBELL.SONG*: "Bicylce Built for Two" AKA "Daisy Bell"  
- *DAISYBELL.MIDI*: "Bicylce Built for Two" AKA "Daisy Bell" in MIDI-like format for KSYNTH.MIDI
- *KSYNTH.MIDI*: MIDI-style KSYNTH player routine. Looks up notes from MIDI.LOOKUP instead of raw cycle counts.     
- *MIDI.LOOKUP*: Lookup table of notes to cycle counts for MIDI style player.     
- *RANDOMNOTES*: A routine to play random tones with the KSYNTH routine.
- *MIDI.LOOKUP2*: Alternate MIDI lookup table that covers larger range of tones
- *TWOTONE.PLAYER*: Slightly different MIDI-style player. Plays arbitrary two-note combinations.
+- *KSYNTH*: The core sound generation routine
+- *KSYNTH.PLAYER*: Basic player routine. Assumes SONG bytes starting at $1000
+- *BFLATSCALE.SONG*: B-Flat scale
+- *VICTORY.SONG*: "Victory" tune from Karateka    
+- *DAISYBELL.SONG*: "Bicylce Built for Two" AKA "Daisy Bell"  
+- *DAISYBELL.MIDI*: "Bicylce Built for Two" AKA "Daisy Bell" in MIDI-like format for KSYNTH.MIDI
+- *KSYNTH.MIDI*: MIDI-style KSYNTH player routine. Looks up notes from MIDI.LOOKUP instead of raw cycle counts.     
+- *MIDI.LOOKUP*: Lookup table of notes to cycle counts for MIDI style player.     
+- *RANDOMNOTES*: A routine to play random tones with the KSYNTH routine.
+- *MIDI.LOOKUP2*: Alternate MIDI lookup table that covers larger range of tones
+- *TWOTONE.PLAYER*: Slightly different MIDI-style player. Plays arbitrary two-note combinations.
 
 To do: Add more MIDI example songs.
 
