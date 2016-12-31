@@ -82,9 +82,11 @@ MAIN_NO_DRAW
 
 MAIN_KEY_HIT           db       0                        ; store last key hit in buffer
 MAIN_KEY_TABLE         asc      90," ",#KEY_LTARROW,#KEY_RTARROW  ; 90 = CTRL-P
+                       asc      8C,93,8E                 ; 8C=^L  93=^S  8E=^N
                        asc      "?","h","H"
                        asc      "b",00
 MAIN_KEY_JUMP_TABLE    da       MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKEY_LEFT-1,MAINKEY_RIGHT-1
+                       da       MAINKEY_LOAD-1,MAINKEY_SAVE-1,MAINKEY_NEW-1
                        da       MAINKEY_HELP-1,MAINKEY_HELP-1,MAINKEY_HELP-1
                        da       SetSongBFlatScale-1
 
@@ -148,6 +150,38 @@ MAINKEY_HELP           jsr      HOME
 
 
 
+MAINKEY_LOAD
+MAINKEY_SAVE
+MAINKEY_NEW
+                       jsr      DrawDialogBox
+                       PRINTXY  #4;#18;_dlg_str_new_h
+                       PRINTXY  #4;#21;_dlg_str_new
+
+                       jsr      RDKEY
+                       cmp      #"Y"
+                       beq      :got_y
+                       cmp      #"y"
+                       beq      :got_y
+                       bne      :done                    ; can't rts, so make common exit
+:got_y                 jsr      ks_getsong
+                       sta      $0                       ; uses ZP $0
+                       sty      $1
+
+
+                       ldy      #0                       ; ERASE LOOP
+:load                  lda      ($0),y
+                       beq      :done
+                       lda      #0
+:store                 sta      ($0),y
+                       iny
+                       sta      ($0),y
+                       iny
+                       bne      :load
+:done
+                       jmp      MAIN                     ; need redraw!
+
+_dlg_str_new_h         asc      ".NEW.",00
+_dlg_str_new           asc      "Create a new song (y/N)? ",00
 
 ** END OF MAIN KEY HANDLERS
 **********************************
@@ -361,7 +395,15 @@ DrawNoteBoard
                        GOXY     #0;#8
                        lda      #NoteBoardStrs
                        ldy      #>NoteBoardStrs
-                       ldx      #00                      ; horiz pos
+                       ldx      #01                      ; horiz pos
+                       jsr      PrintStringsX            ; someone should make a XY version ;)
+                       rts
+
+DrawDialogBox
+                       GOXY     #0;#18
+                       lda      #DialogBoxStrs
+                       ldy      #>DialogBoxStrs
+                       ldx      #01                      ; horiz pos
                        jsr      PrintStringsX            ; someone should make a XY version ;)
                        rts
 
@@ -452,29 +494,35 @@ SongSpace              ds       1024
 
 
 
-MainMenuStrs
-                       asc      "                KSYNTHED  ",8D,8D,00
+MainMenuStrs           asc      "                KSYNTHED  ",8D,8D,00
                        asc      " Song:                    Notes:   /127",00,00
 
-CheatSheetStrs
 
-                       asc      "   C  C# D  Eb E  F  F# G  G# A  Bb B ",8D,00
+CheatSheetStrs         asc      "   C  C# D  Eb E  F  F# G  G# A  Bb B ",8D,00
                        asc      "   -- -- -- -- -- -- -- -- -- -- -- --",8D,00
                        asc      "   25 23 21 1F 1E 1C 1A 19 17 16 15 13",8D,00
                        asc      "   4B 47 43 3F 3C 38 35 32 2F 2D 2A 27",8D,00
                        asc      "   96 8E 86 7E 77 71 6A 64 5E 59 54 4F",8D,00
-                       asc      "            FC EF E1 D5 C9 BD B3 A9 9F",00
-                       asc      00,00
+                       asc      "            FC EF E1 D5 C9 BD B3 A9 9F",00,00
+
+
+DialogBoxStrs          asc      " ___________________________________",8D,00
+                       asc      "|                                   |`",8D,00
+                       asc      "|                                   |`",8D,00
+                       asc      "|                                   |`",8D,00
+                       asc      "|                                   |`",8D,00
+                       asc      "|___________________________________|`",00,00
+
 
 NoteBoardStrs
-                       asc      "  ___ ___ ___ ___ === ___ ___ ___ ___",8D,00
-                       asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
-                       asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
-                       asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
-                       asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
-                       asc      " |   |   |   |   |   |   |   |   |   |`",8D,00
-                       asc      " |___|___|___|___|___|___|___|___|___|`",8D,00
-                       asc      "  ``` ``` ``` ``` \\\ ``` ``` ``` ```",8D,00,00
+                       asc      " ___ ___ ___ ___ === ___ ___ ___ ___",8D,00
+                       asc      "|   |   |   |   |   |   |   |   |   |`",8D,00
+                       asc      "|   |   |   |   |   |   |   |   |   |`",8D,00
+                       asc      "|   |   |   |   |   |   |   |   |   |`",8D,00
+                       asc      "|   |   |   |   |   |   |   |   |   |`",8D,00
+                       asc      "|   |   |   |   |   |   |   |   |   |`",8D,00
+                       asc      "|___|___|___|___|___|___|___|___|___|`",8D,00
+                       asc      " ``` ``` ``` ``` \\\ ``` ``` ``` ```",8D,00,00
 
 
 HelpScreen1Strs        asc      " _____________  KSYNTHED _____________",8D,00
