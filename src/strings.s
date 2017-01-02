@@ -87,6 +87,8 @@ PrintString           sta   :loop+1
 ******* BELOW REALLY COMES FROM MMT MENU (mmt/src/menu.s) ******
 ** I'm thinking these are mostly related to string hangling for input and output
 ** so it is starting to make sense to put them here.
+** BUT!!!! I need to have 8-bit versions available for a generic library
+
 
 * x/y = high/low
 BINtoBCD              stx   BIN
