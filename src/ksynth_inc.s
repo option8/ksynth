@@ -14,19 +14,45 @@ ks_song_space      DA    $1000
 ks_latch_callback  DA    ks_latch_stub
 ks_latch_stub      RTS
 
+
+
 ** Song Location Setter **
 ks_setsong
                    STA   ks_song_space
                    STY   ks_song_space+1
-                   STA   ks_get_song_value+1  ; also patch this in case people want to
-                   STY   ks_get_song_value+2  ; get song values before playing song (like for display)
+                   STA   ks_get_songvalue+1   ; also patch this in case people want to
+                   STY   ks_get_songvalue+2   ; get song values before playing song (like for display)
+                   STA   ks_set_songvalue+1   ; also patch this in case people want to
+                   STY   ks_set_songvalue+2   ; get song values before playing song (like for display)
                    RTS
 
-** Song Location Setter **
-ks_getsong
-                  lda   ks_song_space
-                  ldy   ks_song_space+1
-                  RTS
+** Song Location Getter **
+ks_get_songaddr
+                   lda   ks_song_space
+                   ldy   ks_song_space+1
+                   RTS
+
+
+** Song Length Getter **
+ks_get_songlen     jsr   ks_get_songaddr
+                   sta   $0                   ; uses ZP $0
+                   sty   $1
+
+                   ldy   #0
+:loop              lda   ($0),y
+                   beq   :found_0
+                   iny
+                   bne   :loop
+:found_0           iny                        ; +1 for second zero as part of note standard
+                   tya
+                   rts
+
+ks_get_songvalue   lda   $1000,x
+                   rts
+
+ks_set_songvalue   sta   $1000,x
+                  rts
+
 
 ** Latch Callback Setter **
 * NOTE: Be careful to preserve or restore A in your callback.  It is song index.
@@ -99,18 +125,16 @@ ks_player
 :song_done         RTS                        ;
 
 
-ks_get_song_value  lda   $1000,x
-                   rts
 
 ks_player_latched
 :patch_player      LDA   ks_song_space
                    STA   :song_space+1
                    STA   :song_space2+1
-                   STA   ks_get_song_value+1
+                   STA   ks_get_songvalue+1
                    LDY   ks_song_space+1
                    STY   :song_space+2
                    STY   :song_space2+2
-                   STY   ks_get_song_value+2
+                   STY   ks_get_songvalue+2
                    LDA   ks_latch_callback
                    STA   :latch_callback+1
                    LDY   ks_latch_callback+1

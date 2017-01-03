@@ -5,18 +5,21 @@
 
 * TO DO:
 *  X- play current note
-*  - return to Edit note  \
+*  X- return to Edit note  \
 *  - insert note           > note entry  - String Inputter - dialog / window?
 *  - delete note          /
 *  - virtual keyboard ?
 *  - up/down note nudging ?  what about duration?
-*  - load
-*  - save
-*  - new
-*  - help
+*  X- load
+*  X- save
+*  X- new
+*  X- help
+*  - play from here
+*  - copy note
+*  - paste note
 *  - MESSAGES
 *    - on EOF note, "HIT RETURN TO ADD A NOTE HERE"
-*    - on
+*    -
 
 * Note entry - virtual keyboard / tempo lengths
 
@@ -49,6 +52,7 @@ LAYOUT_NOTEDUR_Y       =        13
 * MAIN RUN LOOP - REDRAWS SCREEN
 MAIN
                        jsr      DrawMenuBackground
+                       jsr      DrawNoteCount
                        jsr      DrawNoteBoard
 MAIN_DRAW_NOTES
                        jsr      DrawNotes
@@ -77,15 +81,17 @@ MAIN_NO_DRAW
                        rts                               ; and return (jmp)
 :key_not_found         GOXY     #19;#1
                        lda      MAIN_KEY_HIT
-                       jsr      $FDDA
+                       jsr      PRBYTE                   ; $FDDA
                        jmp      :MAIN_KEY_LOOP
 
 MAIN_KEY_HIT           db       0                        ; store last key hit in buffer
-MAIN_KEY_TABLE         asc      90," ",#KEY_LTARROW,#KEY_RTARROW  ; 90 = CTRL-P
+MAIN_KEY_TABLE         asc      90," ",8D                ; 90 = CTRL-P
+                       asc      #KEY_LTARROW,#KEY_RTARROW
                        asc      8C,93,8E                 ; 8C=^L  93=^S  8E=^N
                        asc      "?","h","H"
                        asc      "b",00
-MAIN_KEY_JUMP_TABLE    da       MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKEY_LEFT-1,MAINKEY_RIGHT-1
+MAIN_KEY_JUMP_TABLE    da       MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKEY_ENTERNOTE-1
+                       da       MAINKEY_LEFT-1,MAINKEY_RIGHT-1
                        da       MAINKEY_LOAD-1,MAINKEY_SAVE-1,MAINKEY_NEW-1
                        da       MAINKEY_HELP-1,MAINKEY_HELP-1,MAINKEY_HELP-1
                        da       SetSongBFlatScale-1
@@ -98,33 +104,33 @@ MAINKEY_PLAYSONG       jsr      ks_player_latched        ; included from ksynth_
                        jmp      MAIN_NO_DRAW
 
 
-MAINKEY_LEFT           lda      _ks_current_note_idx
+MAINKEY_LEFT           lda      ks_current_note_idx
                        beq      :no_dec
                        dec
-                       sta      _ks_current_note_idx
+                       sta      ks_current_note_idx
 :no_dec                jmp      MAIN_DRAW_NOTES
 
 
-MAINKEY_RIGHT          lda      _ks_current_note_idx     ;
+MAINKEY_RIGHT          lda      ks_current_note_idx      ;
                        asl
                        tax
-                       jsr      ks_get_song_value        ; look at duration bytes
+                       jsr      ks_get_songvalue         ; look at duration bytes
                        cmp      #0
                        beq      :no_inc                  ;  - if zero, last note of song
-                       inc      _ks_current_note_idx
+                       inc      ks_current_note_idx
 :no_inc                jmp      MAIN_DRAW_NOTES
 
 
-MAINKEY_PLAYNOTE       lda      _ks_current_note_idx
+MAINKEY_PLAYNOTE       lda      ks_current_note_idx
                        ASL
                        TAX
-                       jsr      ks_get_song_value
+                       jsr      ks_get_songvalue
                        sta      SongOneNote              ; copy note duration
                        INX
-                       jsr      ks_get_song_value
+                       jsr      ks_get_songvalue
                        sta      SongOneNote+1            ; copy note value
 
-                       jsr      ks_getsong
+                       jsr      ks_get_songaddr
                        pha                               ; save A (address part)
                        tya
                        pha                               ; save Y (address part)
@@ -137,7 +143,41 @@ MAINKEY_PLAYNOTE       lda      _ks_current_note_idx
                        pla                               ;restore A (address part)
                        jsr      ks_setsong
                        jmp      MAIN_NO_DRAW
-                       rts
+
+
+MAINKEY_ENTERNOTE
+                       jsr      ks_get_songaddr
+                       sta      _enternote_tmpaddr
+                       sty      _enternote_tmpaddr+1
+
+                       lda      ks_current_note_idx
+                       asl                               ; *2 for memory index
+                       clc
+                       adc      _enternote_tmpaddr
+                       adc #1 ; start with second value (note)
+                       sta      _enternote_tmpaddr
+
+
+                       GOXY     #18;#11
+                       lda      #2                       ; len in hex digits (nibbles)
+                       ldx      _enternote_tmpaddr
+                       ldy      _enternote_tmpaddr+1
+                       jsr      GetHexByteOrder
+
+
+                       ldx      _enternote_tmpaddr
+                       dex
+                       stx      _enternote_tmpaddr       ; uhhh.. decrement back to first value (duration)
+
+
+                       GOXY     #18;#13
+                       lda      #2                       ; len in hex digits (nibbles)
+                       ldx      _enternote_tmpaddr
+                       ldy      _enternote_tmpaddr+1
+                       jsr      GetHexByteOrder
+
+                       jmp      MAIN
+_enternote_tmpaddr     da       $1000
 
 
 MAINKEY_HELP           jsr      HOME
@@ -151,7 +191,102 @@ MAINKEY_HELP           jsr      HOME
 
 
 MAINKEY_LOAD
+                       jsr      DrawDialogBox
+                       PRINTXY  #4;#18;_dlg_str_load_h
+                       PRINTXY  #4;#21;_dlg_str_load
+                       GOXY     #4;#22
+                       jsr      GETLN1
+                                                         ; copy input buffer string to parameters string
+                       jsr      StrBufToFilename
+                       jsr      OpenFile
+                       bcc      :open_success
+:error                 pha                               ; prodos MLI error (err code in A)
+                       cmp      #$46                     ; no such file
+                       beq      :error_no_file
+:error_other           PRINTXY  #4;#21;_dlg_str_load_e1
+                       pla
+                       jsr      PRBYTE                   ; $FDDA
+                       bne      :done_pause              ; BRA
+:error_no_file         PRINTXY  #4;#21;_dlg_str_load_e2
+                       pla
+                       jsr      WaitKey
+                       bne      :done                    ; BRA
+:open_success          jsr      WipeSong                 ; clear our buffer
+                       jsr      ks_get_songaddr
+                       sta      $0                       ; uses ZP $0
+                       sty      $1
+                       jsr      ReadFile
+                       bcc      :read_success
+:done_pause            jsr      WaitKey
+:read_success
+:done
+                       jsr      CloseFile
+                       jmp      MAIN                     ; need redraw!
+
 MAINKEY_SAVE
+                       jsr      DrawDialogBox
+                       PRINTXY  #4;#18;_dlg_str_save_h
+                       PRINTXY  #4;#21;_dlg_str_save
+                       GOXY     #4;#22
+                       jsr      GETLN1                   ; get filename
+                                                         ; copy input buffer string to parameters string
+                       jsr      StrBufToFilename
+                       jsr      CreateFile
+                       bcc      :create_success
+:create_error          cmp      #$47                     ; dup filename - already created?
+                       bne      :error_create_unknown
+:create_error_exists   jsr      DrawDialogBox            ; file exists, confirm save
+                       PRINTXY  #4;#18;_dlg_str_save_h
+                       PRINTXY  #4;#21;_dlg_str_save_e1
+                       jsr      RDKEY
+                       cmp      #"Y"
+                       beq      :got_y
+                       cmp      #"y"
+                       beq      :got_y
+                       bne      :done                    ; can't rts, so use common exit
+:got_y                 jmp      MAIN
+
+:error_create_unknown  pha                               ; prodos MLI error (err code in A)
+:error_other           PRINTXY  #4;#21;_dlg_str_save_e2
+                       pla
+                       jsr      PRBYTE                   ; $FDDA
+                       bne      :done_wait               ; BRA
+:create_success                                          ; FILE CREATED, NOW SAVE!
+                       jsr      OpenFile
+                       bcc      :open_success
+:error_open            pha                               ; prodos MLI error (err code in A)
+                       PRINTXY  #4;#21;_dlg_str_load_e2
+                       pla
+                       jsr      PRBYTE                   ; $FDDA
+                       bne      :done_wait               ; BRA
+:open_success          jsr      ks_get_songaddr
+                       clc
+                       sta      $0                       ; uses ZP $0
+                       sty      $1
+                       ldy      #0
+:copy_loop             lda      ($0),y                   ; copy song to iobuffer (should fit)
+                       sta      IOBuffer,y
+                       beq      :zero_byte
+                       iny                               ; we copy two bytes at a time for our song fmt
+                       lda      ($0),y
+                       sta      IOBuffer,y
+                       bcc      :copy_loop
+:zero_byte             iny
+                       sta      IOBuffer,y               ; always copy the second part of this pair anyway
+                       sty      _write_request_count     ; file length
+                       jsr      WriteFile
+                       bcc      :write_done
+:error_write           pha                               ; prodos MLI error (err code in A)
+                       PRINTXY  #4;#21;_dlg_str_load_e2
+                       pla
+                       jsr      PRBYTE                   ; $FDDA
+:done_wait             jsr      WaitKey
+
+:write_done            jsr      CloseFile
+
+:done                  jmp      MAIN                     ; need redraw!
+
+
 MAINKEY_NEW
                        jsr      DrawDialogBox
                        PRINTXY  #4;#18;_dlg_str_new_h
@@ -162,12 +297,15 @@ MAINKEY_NEW
                        beq      :got_y
                        cmp      #"y"
                        beq      :got_y
-                       bne      :done                    ; can't rts, so make common exit
-:got_y                 jsr      ks_getsong
+                       bne      :done                    ; can't rts, so use common exit
+:got_y                 jsr      WipeSong
+:done
+                       jmp      MAIN                     ; need redraw!
+
+
+WipeSong               jsr      ks_get_songaddr
                        sta      $0                       ; uses ZP $0
                        sty      $1
-
-
                        ldy      #0                       ; ERASE LOOP
 :load                  lda      ($0),y
                        beq      :done
@@ -177,8 +315,20 @@ MAINKEY_NEW
                        sta      ($0),y
                        iny
                        bne      :load
-:done
-                       jmp      MAIN                     ; need redraw!
+:done                  lda      #0
+                       sta      ks_current_note_idx
+                       rts
+
+_dlg_str_load_h        asc      ".LOAD.",00
+_dlg_str_load          asc      "Enter filename: ",00
+_dlg_str_load_e1       asc      "Error opening file. ",00
+_dlg_str_load_e2       asc      "Error opening file, not found. ",00
+
+_dlg_str_save_h        asc      ".SAVE.",00
+_dlg_str_save          asc      "Enter filename: ",00
+_dlg_str_save_e1       asc      "File exists, overwrite (y/N)? ",00
+_dlg_str_save_e2       asc      "Error saving file. ",00
+
 
 _dlg_str_new_h         asc      ".NEW.",00
 _dlg_str_new           asc      "Create a new song (y/N)? ",00
@@ -199,7 +349,7 @@ LatchDummy             rts
 LatchTest
                        pha                               ; preserve A
                        lsr                               ; convert to ptr
-                       sta      _ks_current_note_idx     ;save
+                       sta      ks_current_note_idx      ;save
                        jsr      DrawNotes
                        lda      $c000
                        bpl      :no_key
@@ -210,7 +360,7 @@ LatchTest
 :no_key                clc                               ; set return value (normal)
                        pla                               ;restore A
                        rts
-_ks_current_note_idx   db       0                        ; actual index to note data, i.e. - Note #i out of #127 notes in song
+ks_current_note_idx    db       0                        ; actual index to note data, i.e. - Note #i out of #127 notes in song
                                                          ;
 
 
@@ -255,7 +405,7 @@ DrawNotes
                        sta      _drawing_note_xpos
 
                                                          ; NOW FIND OUT IF A REAL NOTE OR EMPTY BOX
-                       lda      _ks_current_note_idx     ; actual song in note - starts at 0
+                       lda      ks_current_note_idx      ; actual song in note - starts at 0
 
                                                          ;  0      |1      |2      |3      |4
                        clc
@@ -286,11 +436,11 @@ DrawOneNote
                        sta      _drawing_note_idx
                        asl                               ;*2
                        tax
-                       jsr      ks_get_song_value        ; get duration
+                       jsr      ks_get_songvalue         ; get duration
                        beq      :eof_hit
                        sta      _drawing_note_dur
                        inx                               ; +1 for note (0 is get duration above)
-                       jsr      ks_get_song_value
+                       jsr      ks_get_songvalue
                        sta      _drawing_note_val
                        ldx      #0
 :search_loop           lda      ks_valid_note_tbl,x
@@ -332,7 +482,12 @@ DrawOneNote
                        ldy      #LAYOUT_NOTENUM_Y
                        jsr      GoXY
                        lda      _drawing_note_idx
-                       jsr      $FDDA
+
+                       tax                               ; for BINtoBCD
+                       ldy      #0                       ; for BINtoBCD
+                       jsr      BINtoBCD
+                       txa                               ; for PRNUM
+                       jsr      PRNUM                    ; MY SPECIAL SAUCE
 
 
                        ldx      _drawing_note_xpos       ; draw note str
@@ -347,14 +502,14 @@ DrawOneNote
                        ldy      #LAYOUT_NOTEVAL_Y
                        jsr      GoXY
                        lda      _drawing_note_val
-                       jsr      $FDDA
+                       jsr      PRBYTE                   ; $FDDA
 
 
                        ldx      _drawing_note_xpos       ; draw note dur
                        ldy      #LAYOUT_NOTEDUR_Y
                        jsr      GoXY
                        lda      _drawing_note_dur
-                       jsr      $FDDA
+                       jsr      PRBYTE                   ; $FDDA
 
                        rts
 
@@ -418,6 +573,18 @@ DrawMenuBackground     jsr      HOME
                        ldy      #>CheatSheetStrs
                        ldx      #00                      ; horiz pos
                        jsr      PrintStringsX            ; someone should make a XY version ;)
+
+                       rts
+
+DrawNoteCount          GOXY     #32;#2
+                       jsr      ks_get_songlen
+                       lsr                               ; /2 for note count
+
+                       tax                               ; for BINtoBCD
+                       ldy      #0                       ; for BINtoBCD
+                       jsr      BINtoBCD
+                       txa                               ; for PRNUM
+                       jsr      PRNUM                    ; MY SPECIAL SAUCE
 
                        rts
 
@@ -530,6 +697,7 @@ HelpScreen1Strs        asc      " _____________  KSYNTHED _____________",8D,00
                        asc      "| SONG CONTROL KEYS                   |",8D,00
                        asc      "|                                     |",8D,00
                        asc      "|  CTRL-P  =  PLAY SONG               |",8D,00
+                       asc      "|  CTRL-H  =  PLAY FROM HERE          |",8D,00
                        asc      "|  CTRL-L  =  LOAD SONG               |",8D,00
                        asc      "|  CTRL-S  =  SAVE SONG               |",8D,00
                        asc      "|  CTRL-N  =  NEW SONG                |",8D,00
@@ -540,6 +708,7 @@ HelpScreen1Strs        asc      " _____________  KSYNTHED _____________",8D,00
                        asc      "|  RETURN     =  EDIT NOTE            |",8D,00
                        asc      "|  CTRL-I     =  INSERT NOTE          |",8D,00
                        asc      "|  CTRL-D     =  DELETE NOTE          |",8D,00
+                       asc      "|  CTRL-C/V   =  COPY/PASTE NOTE      |",8D,00
                        asc      "|                                     |",8D,00
                        asc      "|                                     |",8D,00
                        asc      "|  H or ?     = HELP SCREEN           |",8D,00
@@ -631,6 +800,6 @@ WaitKey                lda      $c000
 
                        put      strings
                        put      ksynth_inc
+                       put      files
                        use      applerom
                        dsk      KSYNTHED.SYSTEM
-

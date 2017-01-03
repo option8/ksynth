@@ -80,6 +80,34 @@ PrintString           sta   :loop+1
 :done                 rts
 
 
+** Natural style, right aligned, no leading zeros
+** Assumes a byte passed in.  So space for 3 decimal digits, plz.
+** Cursor is leftmost char, which may be blank.
+** A value of zero still prints a single zero on the right.
+** Params: A=low byte  Y=high byte
+PRNUM                 pha                         ;start with leftmost so stash low byte
+                      tya                         ; work on high byte
+                      beq   :space1               ; nothing to print
+:high_byte_low_nib    jsr   PRHEX                 ; otherwise
+                      bne   :low_byte_high_nib    ; BRA
+:space1               lda   #" "                  ;"
+                      jsr   COUT
+:low_byte_high_nib    pla
+                      pha                         ; save one for later
+                      lsr
+                      lsr
+                      lsr
+                      lsr
+                      beq   :space2
+                      jsr   PRHEX
+                      sec
+                      bcs   :low_byte_low_nib     ; BRA
+:space2               lda   #" "                  ;"
+                      jsr   COUT
+:low_byte_low_nib     pla
+                      and   #$0F                  ; just low nib
+                      jsr   PRHEX
+                      rts
 
 
 
@@ -205,3 +233,136 @@ BINBCDVARDUMP
                       jsr   PRBYTE
                       jsr   RDKEY
                       rts
+
+
+
+*** INPUT LIBRARY FOR MENU
+* Pass desired length in A
+* y/x= storage area
+GetHexByteOrder
+                             pha
+                             lda   #$1                        ;1=6502 ordering
+                             sta   _gethex_byteorder
+                             pla
+                             bra   GetHexStart
+
+GetHex                       stz   _gethex_byteorder          ;0=linear order (01 23 45 67 etc, in memory)
+GetHexStart
+                             sta   _gethex_maxlen
+                             stx   _gethex_resultptr
+                             sty   _gethex_resultptr+1
+                             stz   _gethex_current
+                             lda   $24
+                             sta   _gethex_screenx            ;stash x.  gets clobbered by RDKEY
+
+:input                       jsr   RDKEY
+
+                             cmp   #$9B                       ;esc = abort
+                             bne   :notesc
+                             rts
+:notesc                      cmp   #$FF                       ;del
+                             beq   :goBack
+                             cmp   #$88
+                             bne   :notBack
+:goBack
+                             lda   _gethex_current
+                             beq   :badChar                   ; otherwise result = -1
+                             dec   _gethex_current
+                             dec   _gethex_screenx
+                             GOXY  _gethex_screenx;$25
+                             bra   :input
+:notBack                     cmp   #"9"+1
+                             bcs   :notNum                    ;bge > 9
+                             cmp   #"0"
+                             bcc   :badChar                   ;
+                             sec
+                             sbc   #"0"
+                             bra   :storeInput
+:notNum                      cmp   #"a"
+                             bcc   :notLower
+                             sec
+                             sbc   #$20                       ;ToUpper
+:notLower                    cmp   #"A"
+                             bcc   :badChar
+                             cmp   #"F"+1
+                             bcs   :badChar
+                             bcc   :gotHex
+***
+:badChar                     jmp   :input                     ;jmp out of here
+***
+:gotHex
+                             sec
+                             sbc   #"A"-10
+:storeInput
+                             pha
+                             jsr   PRHEX
+                             pla
+                             ldy   _gethex_current
+                             sta   _gethex_buffer,y
+                             inc   _gethex_screenx
+                             iny
+                             cpy   #_gethex_internalmax
+                             bge   :internalmax
+                             cpy   _gethex_maxlen
+                             bge   :passedmax
+                             sty   _gethex_current
+                             bra   :input
+:internalmax
+:passedmax
+                             lda   _gethex_resultptr          ;set destination buffer to result memory
+                             sta   $0
+                             lda   _gethex_resultptr+1
+                             sta   $1
+                                                              ;prep to copy back to result
+                             lda   _gethex_byteorder
+                             beq   :linearcopy
+:byteordercopy               ldx   #0
+                             lda   _gethex_maxlen
+                             lsr                              ;/2 ... took a looong time to find this bug
+                             tay
+                             dey                              ;we start at n-1 and work down to 0
+:copyBufferBackwardsByte     lda   _gethex_buffer,x
+                             asl                              ; move to upper nibble
+                             asl
+                             asl
+                             asl
+                             sta   ($0),y                     ; store
+                             inx
+                             lda   _gethex_buffer,x
+                             ora   ($0),y
+                             sta   ($0),y
+                             dey
+                             inx
+                             cpx   _gethex_maxlen
+                             bcc   :copyBufferBackwardsByte
+                             rts
+
+
+
+:linearcopy                  ldx   #0
+                             ldy   #0
+:copyBuffer                  lda   _gethex_buffer,x
+                             asl                              ; move to upper nibble
+                             asl
+                             asl
+                             asl
+                             sta   ($0),y                     ; store
+                             inx
+                             lda   _gethex_buffer,x
+                             ora   ($0),y
+                             sta   ($0),y
+                             iny
+                             inx
+                             cpx   _gethex_maxlen
+                             bcc   :copyBuffer
+                             rts
+
+
+
+_gethex_internalmax          equ   8
+_gethex_resultptr            da    0000
+_gethex_maxlen               db    1
+_gethex_current              db    0
+_gethex_buffer               ds    _gethex_internalmax
+_gethex_screenx              db    0
+_gethex_byteorder            db    0                          ;0=linear, 1=6502 address byte order.. Least significant byte first.
