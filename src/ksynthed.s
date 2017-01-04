@@ -6,8 +6,8 @@
 * TO DO:
 *  X- play current note
 *  X- return to Edit note  \
-*  - insert note           > note entry  - String Inputter - dialog / window?
-*  - delete note          /
+*  X- insert note           > note entry  - String Inputter - dialog / window?
+*  X- delete note          /
 *  - virtual keyboard ?
 *  - up/down note nudging ?  what about duration?
 *  X- load
@@ -15,21 +15,17 @@
 *  X- new
 *  X- help
 *  - play from here
-*  - copy note
-*  - paste note
-*  - MESSAGES
-*    - on EOF note, "HIT RETURN TO ADD A NOTE HERE"
-*    -
-
-* Note entry - virtual keyboard / tempo lengths
-
+*  X- copy note
+*  X- paste note
+*  - MAKE 8 bit 6502 safe
+*  - Write 16-bit song player (>127 notes)
 
 
                        org          $2000
 
-LAYOUT_CURRENT_NOTE_X  =            18                                                   ; col position of current note "##"
-LAYOUT_NOTENUM_Y       =            07                                                   ; row position of current note "##"
-LAYOUT_NOTESTR_Y       =            10                                                   ; the line on which note triplets are drawNote
+LAYOUT_CURRENT_NOTE_X  =            18                                                    ; col position of current note "##"
+LAYOUT_NOTENUM_Y       =            07                                                    ; row position of current note "##"
+LAYOUT_NOTESTR_Y       =            10                                                    ; the line on which note triplets are drawNote
 LAYOUT_NOTEVAL_Y       =            11
 LAYOUT_NOTEDUR_Y       =            13
 LAYOUT_ALERT_X         =            6
@@ -46,33 +42,43 @@ LAYOUT_ALERT_Y         =            4
 
 
 
+                       asc          89,84,F2,F5                                           ; 89=^I  84=^D  F2=Ins  F5=Del
 
 
-* PRESET SONG UNTIL PLAYER DISPLAY IS EVEN WORKING
+* PRESET SONG
                        jsr          SetSongKarateka
 
-* MAIN RUN LOOP - REDRAWS SCREEN
-MAIN
-                       jsr          DrawMenuBackground
-                       jsr          DrawNoteCount
+* MAIN RUN LOOP
+MAIN                   jsr          DrawMenuBackground                                    ; MENU REENTRY #1 - Redraw entire screen
                        jsr          DrawNoteBoard
-MAIN_DRAW_NOTES
+
+MAIN_DRAW_NOTES        jsr          DrawNoteCount                                         ; MENU REENTRY #2 - Only render note data
                        jsr          DrawNotes
-MAIN_NO_DRAW
+
+MAIN_NO_DRAW                                                                              ; MENU REENTRY #3 - Render nothing
 :MAIN_KEY_LOOP         lda          $c000
                        bmi          :key_hit
                        jsr          FancyWait
                        jmp          :MAIN_KEY_LOOP
 :key_hit               sta          $c010
                        sta          MAIN_KEY_HIT
-                                                                                         ; HACK ALERT : this is where we clear alert messages,
-                                                                                         ; and do stuff, because reasons...
-                       jsr          MAIN_CLEAR_ALERTS                                    ; erases any "old" info/alert-y stuff
+                                                                                          ; HACK ALERT : this is where we clear alert messages,
+                                                                                          ; and do stuff, because reasons...
+                       jsr          MAIN_CLEAR_ALERTS                                     ; erases any "old" info/alert-y stuff
                        lda          MAIN_KEY_HIT
                        cmp          #$83
                        beq          :keep_repeat
                        cmp          #$96
                        beq          :keep_repeat
+                       cmp          #$89
+                       beq          :keep_repeat
+                       cmp          #$84
+                       beq          :keep_repeat
+                       cmp          #$F2
+                       beq          :keep_repeat
+                       cmp          #$F5
+                       beq          :keep_repeat
+
 :clear_repeat          jsr          MAIN_CLEAR_REPEAT
 :keep_repeat
 
@@ -82,36 +88,38 @@ MAIN_NO_DRAW
                        cmp          MAIN_KEY_HIT
                        beq          :key_found
                        inx
-                       bne          :scan_key_table_loop                                 ; BRA
+                       bne          :scan_key_table_loop                                  ; BRA
 :key_found
-                       txa                                                               ; index
-                       asl                                                               ; 6502 jmp table routine
-                       tax                                                               ; ...
-                       lda          MAIN_KEY_JUMP_TABLE+1,X                              ; ...
-                       pha                                                               ; push it on stack
-                       lda          MAIN_KEY_JUMP_TABLE,X                                ; ...
-                       pha                                                               ; push second byte of address(-1) on stack
-                       rts                                                               ; and return (jmp)
+                       txa                                                                ; index
+                       asl                                                                ; 6502 jmp table routine
+                       tax                                                                ; ...
+                       lda          MAIN_KEY_JUMP_TABLE+1,X                               ; ...
+                       pha                                                                ; push it on stack
+                       lda          MAIN_KEY_JUMP_TABLE,X                                 ; ...
+                       pha                                                                ; push second byte of address(-1) on stack
+                       rts                                                                ; and return (jmp)
 :key_not_found         GOXY         #19;#1
                        lda          MAIN_KEY_HIT
-                       jsr          PRBYTE                                               ; $FDDA
+                       jsr          PRBYTE                                                ; $FDDA
                        jmp          :MAIN_KEY_LOOP
 
-MAIN_KEY_HIT           db           0                                                    ; store last key hit in buffer
-MAIN_KEY_TABLE         asc          90," ",8D                                            ; 90 = CTRL-P
-                       asc          8C,93,8E                                             ; 8C=^L  93=^S  8E=^N
-                       asc          83,96                                                ; 83=^C  96=^V
+MAIN_KEY_HIT           db           0                                                     ; store last key hit in buffer
+MAIN_KEY_TABLE         asc          90," ",8D                                             ; 90 = CTRL-P
+                       asc          8C,93,8E                                              ; 8C=^L  93=^S  8E=^N
+                       asc          83,96                                                 ; 83=^C  96=^V
+                       asc          89,84,F2,F5                                           ; 89=^I  84=^D  F2=Ins  F5=Del
                        asc          #KEY_LTARROW,#KEY_RTARROW
                        asc          "?","h","H"
-                       asc          B1,B2,B3,B4,B5,B6,B7,B8,B9                           ; number keys
+                       asc          B1,B2,B3,B4,B5,B6,B7,B8,B9                            ; number keys
                        asc          "b",00
 MAIN_KEY_JUMP_TABLE    da           MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKEY_ENTERNOTE-1
                        da           MAINKEY_LOAD-1,MAINKEY_SAVE-1,MAINKEY_NEW-1
                        da           MAINKEY_COPY-1,MAINKEY_PASTE-1
+                       da           MAINKEY_INSERT-1,MAINKEY_DELETE-1,MAINKEY_INSERT-1,MAINKEY_DELETE-1
                        da           MAINKEY_LEFT-1,MAINKEY_RIGHT-1
                        da           MAINKEY_HELP-1,MAINKEY_HELP-1,MAINKEY_HELP-1
-                       da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1            ; a (tiny space) waste, but whatevs...
-                       da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1            ; it saves on me writing buggy code
+                       da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1             ; a (tiny space) waste, but whatevs...
+                       da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1             ; it saves on me writing buggy code
                        da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1
                        da           SetSongBFlatScale-1
 
@@ -119,12 +127,12 @@ MAIN_KEY_JUMP_TABLE    da           MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKE
 MAIN_CLEAR_ALERTS      PRINTXY      #0;#LAYOUT_ALERT_Y;_alert_str_clear
                        rts
 MAIN_CLEAR_REPEAT      lda          #1
-                       sta          _num_repeat                                          ; clear these "hot" repeat keys
+                       sta          _num_repeat                                           ; clear these "hot" repeat keys
                        rts
 ***************************************
 ** KEY HANDLER ROUTINES START
 
-MAINKEY_PLAYSONG       jsr          ks_player_latched                                    ; included from ksynth_inc.s
+MAINKEY_PLAYSONG       jsr          ks_player_latched                                     ; included from ksynth_inc.s
                        jmp          MAIN_NO_DRAW
 
 
@@ -135,12 +143,12 @@ MAINKEY_LEFT           lda          ks_current_note_idx
 :no_dec                jmp          MAIN_DRAW_NOTES
 
 
-MAINKEY_RIGHT          lda          ks_current_note_idx                                  ;
+MAINKEY_RIGHT          lda          ks_current_note_idx                                   ;
                        asl
                        tax
-                       jsr          ks_get_songvalue                                     ; look at duration bytes
+                       jsr          ks_get_songvalue                                      ; look at duration bytes
                        cmp          #0
-                       beq          :no_inc                                              ;  - if zero, last note of song
+                       beq          :no_inc                                               ;  - if zero, last note of song
                        inc          ks_current_note_idx
 :no_inc                jmp          MAIN_DRAW_NOTES
 
@@ -149,30 +157,30 @@ MAINKEY_PLAYNOTE       lda          ks_current_note_idx
                        ASL
                        TAX
                        jsr          ks_get_songvalue
-                       sta          SongOneNote                                          ; copy note duration
+                       sta          SongOneNote                                           ; copy note duration
                        INX
                        jsr          ks_get_songvalue
-                       sta          SongOneNote+1                                        ; copy note value
+                       sta          SongOneNote+1                                         ; copy note value
 
                        jsr          ks_get_songaddr
-                       pha                                                               ; save A (address part)
+                       pha                                                                ; save A (address part)
                        tya
-                       pha                                                               ; save Y (address part)
+                       pha                                                                ; save Y (address part)
                        lda          #SongOneNote
                        ldy          #>SongOneNote
                        jsr          ks_setsong
                        jsr          ks_player
                        pla
-                       tay                                                               ;restore Y (address part)
-                       pla                                                               ;restore A (address part)
+                       tay                                                                ;restore Y (address part)
+                       pla                                                                ;restore A (address part)
                        jsr          ks_setsong
                        jmp          MAIN_NO_DRAW
 
 MAINKEY_NUM            lda          MAIN_KEY_HIT
                        sec
-                       sbc          #$B0                                                 ; offset to get numbers 1-9, our actual value
+                       sbc          #$B0                                                  ; offset to get numbers 1-9, our actual value
                        sta          _num_repeat
-                       GOXY         #4;#LAYOUT_ALERT_Y
+                       GOXY         #19;#LAYOUT_ALERT_Y
                        lda          #"x"
                        jsr          COUT
                        lda          MAIN_KEY_HIT
@@ -180,24 +188,24 @@ MAINKEY_NUM            lda          MAIN_KEY_HIT
 
                        jmp          MAIN_NO_DRAW
 
-_num_repeat            db           1                                                    ; for a vim style key repeat (but just 1-9)
+_num_repeat            db           1                                                     ; for a vim style key repeat (but just 1-9)
 
 
 MAINKEY_PASTE
                        lda          _note_clipboard_len
-                       sta          _num_repeat                                          ; ugh.. somewhat non-idiomatic re-use of _num_repeat, maybe?
+                       sta          _num_repeat                                           ; ugh.. somewhat non-idiomatic re-use of _num_repeat, maybe?
                        bne          :clip_available
 :no_clip               PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_paste_e1
-                       jmp          MAIN_NO_DRAW                                         ; we out!
-:clip_available        ldy #0 ; init src index
+                       jmp          MAIN_NO_DRAW                                          ; we out!
+:clip_available        ldy          #0                                                    ; init src index
                        lda          ks_current_note_idx
-                       asl                                                               ; *2
+                       asl                                                                ; *2
                        tax
-:copy_loop             lda          _note_clipboard_data,y                               ; copy note duration
+:copy_loop             lda          _note_clipboard_data,y                                ; copy note duration
                        jsr          ks_set_songvalue
                        inx
                        iny
-                       lda          _note_clipboard_data,y                               ; copy note value
+                       lda          _note_clipboard_data,y                                ; copy note value
                        jsr          ks_set_songvalue
                        inx
                        iny
@@ -208,7 +216,7 @@ MAINKEY_PASTE
                        bne          :over1
 :just1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_paste
                        sec
-                       bcs          :done                                                ; BRA
+                       bcs          :done                                                 ; BRA
 :over1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_paste_p1
                        lda          _note_clipboard_len
                        jsr          PRHEX
@@ -216,34 +224,182 @@ MAINKEY_PASTE
 
 
 :done                  lda          #1
-                       sta          _num_repeat                                          ; reset _num_repeat
+                       sta          _num_repeat                                           ; reset _num_repeat
+                       jmp          MAIN_DRAW_NOTES
+
+* A) GET SONG, STORE SRC PTR
+* B) add ks_current_note_idx*2 to ptr (starting point for copy)
+* C) add _num_repeat and save as  dest ptrs
+* D) FIND (SONGLEN - ks_current_note_idx ) *2
+* E) copy src -> dest until EOF
+* F) for _num_repeat store FF/01 at src
+* EEK REPEATED INSERTS FAIL?  BUG!!
+MAINKEY_INSERT         jsr          ks_get_songlen                                        ; destroys ZP (0) so do this first and stash
+                       pha
+                       jsr          ks_get_songaddr                                       ; A)
+                       sta          $0
+                       sty          $1
+
+                       lda          ks_current_note_idx                                   ; B)
+                       asl                                                                ; *2
+                       sta          _insert_stop                                          ; needed later for copy loop comparison
+                       clc
+                       adc          $0
+                       sta          $0
+                       lda          $1
+                       adc          #0                                                    ; handle possible carry (16bit add)
+                       sta          $1
+
+                       lda          _num_repeat                                           ; C)
+                       asl
+                       clc
+                       adc          $0
+                       sta          $2
+                       lda          $1
+                       adc          #0                                                    ; handle possible carry (16bit add)
+                       sta          $3
+
+                       pla                                                                ; D) restore our ks_get_songlen result from above
+                       lsr                                                                ; /2 for note count
+                       sec
+                       sbc          ks_current_note_idx
+                       asl                                                                ; *2 to get index again
+                       tay
+                       iny
+                       iny                                                                ; we want to copy eof bytes
+
+                                                                                          ; E)
+:copy_loop             lda          ($0),y
+                       sta          ($2),y
+                       dey                                                                ; we copy two bytes at a time for our song fmt
+                       lda          ($0),y
+                       sta          ($2),y
+                       dey
+                       cpy          _insert_stop
+                       bne          :copy_loop
+
+                       ldy          #0                                                    ; F)
+                       ldx          _num_repeat
+:clear_loop            lda          #$01
+                       sta          ($0),y                                                ; using src ptr for writes now because we are pointed
+                       iny                                                                ; at the insert area
+                       lda          #$FF                                                  ; rest value
+                       sta          ($0),y
+                       iny
+                       dex
+                       bne          :clear_loop
+
+:draw_alert            lda          _num_repeat
+                       cmp          #1
+                       bne          :over1
+:just1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_insert
+                       sec
+                       bcs          :done                                                 ; BRA
+:over1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_insert_p1
+                       lda          _num_repeat
+                       jsr          PRHEX
+                       PRINTSTRING  _alert_str_insert_p2
+:done                  lda          #1
+                       sta          _num_repeat                                           ; reset _num_repeat
+                       jmp          MAIN_DRAW_NOTES
+
+_insert_stop           db           0
+
+* BASED ON INSERT CODE ABOVE, BUT SWAPPING SOME PTRS HERE
+MAINKEY_DELETE         jsr          ks_get_songlen                                        ; destroys ZP (0) so do this first and stash
+                       pha
+                       jsr          ks_get_songaddr                                       ; A)
+                       sta          $0
+                       sty          $1
+
+                       lda          ks_current_note_idx                                   ; B)
+                       asl                                                                ; *2
+                       clc
+                       adc          $0
+                       sta          $0
+                       lda          $1
+                       adc          #0                                                    ; handle possible carry (16bit add)
+                       sta          $1
+
+                       lda          _num_repeat                                           ; C)
+                       asl
+                       clc
+                       adc          $0
+                       sta          $2
+                       lda          $1
+                       adc          #0                                                    ; handle possible carry (16bit add)
+                       sta          $3
+
+                       pla                                                                ; D) restore our ks_get_songlen result from above
+                       lsr                                                                ; /2 for note count
+                       sec
+                       sbc          ks_current_note_idx
+                       asl                                                                ; *2 to get index again
+                       tay
+                       iny
+                       iny                                                                ; we want to copy eof bytes
+                       sty _insert_stop ; re-use _insert_stop as "_delete_stop"
+                       ldy #0
+
+                                                                                          ; E)
+:copy_loop             lda          ($2),y
+                       sta          ($0),y
+                       iny                                                                ; we copy two bytes at a time for our song fmt
+                       lda          ($2),y
+                       sta          ($0),y
+                       iny
+                       cpy          _insert_stop
+                       bne          :copy_loop
+
+                                                                        ; F)
+                       ldx          _num_repeat
+:clear_loop            lda          #$00
+                       sta          ($0),y                                                ; using src ptr for writes now because we are pointed
+                       iny                                                                ; at the insert area
+                       lda          #$00                                                  ; eof value
+                       sta          ($0),y
+                       iny
+                       dex
+                       bne          :clear_loop
+
+:draw_alert            lda          _num_repeat
+                       cmp          #1
+                       bne          :over1
+:just1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_delete
+                       sec
+                       bcs          :done                                                 ; BRA
+:over1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_delete_p1
+                       lda          _num_repeat
+                       jsr          PRHEX
+                       PRINTSTRING  _alert_str_delete_p2
+:done                  lda          #1
+                       sta          _num_repeat                                           ; reset _num_repeat
                        jmp          MAIN_DRAW_NOTES
 
 
 
-
-MAINKEY_COPY           lda          _num_repeat                                          ; this will get destroyed (dec)
-                       sta          _note_clipboard_len                                  ; but that's ok because clipboard has own length
-                       ldy          #0                                                   ; dest index
+MAINKEY_COPY           lda          _num_repeat                                           ; this will get destroyed (dec)
+                       sta          _note_clipboard_len                                   ; but that's ok because clipboard has own length
+                       ldy          #0                                                    ; dest index
                        lda          ks_current_note_idx
-                       asl                                                               ; *2
+                       asl                                                                ; *2
                        tax
 :copy_loop             jsr          ks_get_songvalue
-                       sta          _note_clipboard_data,y                               ; copy note duration
+                       sta          _note_clipboard_data,y                                ; copy note duration
                        inx
                        iny
                        jsr          ks_get_songvalue
-                       sta          _note_clipboard_data,y                               ; copy note value
+                       sta          _note_clipboard_data,y                                ; copy note value
                        inx
                        iny
                        dec          _num_repeat
                        bne          :copy_loop
-                       lda          _note_clipboard_len                                  ; this part prints our info/alerts messages
+                       lda          _note_clipboard_len                                   ; this part prints our info/alerts messages
                        cmp          #1
                        bne          :over1
 :just1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_copy
                        sec
-                       bcs          :done                                                ; BRA
+                       bcs          :done                                                 ; BRA
 :over1                 PRINTXY      #LAYOUT_ALERT_X;#LAYOUT_ALERT_Y;_alert_str_copy_p1
                        lda          _note_clipboard_len
                        jsr          PRHEX
@@ -251,9 +407,9 @@ MAINKEY_COPY           lda          _num_repeat                                 
 
 
 :done                  lda          #1
-                       sta          _num_repeat                                          ; reset _num_repeat
+                       sta          _num_repeat                                           ; reset _num_repeat
                        jmp          MAIN_NO_DRAW
-_note_clipboard_data   ds           #9*2                                                 ; two bytes, 1 for duration, 1 for note
+_note_clipboard_data   ds           #9*2                                                  ; two bytes, 1 for duration, 1 for note
 _note_clipboard_len    db           #0
 
 
@@ -263,15 +419,15 @@ MAINKEY_ENTERNOTE
                        sty          _enternote_tmpaddr+1
 
                        lda          ks_current_note_idx
-                       asl                                                               ; *2 for memory index
+                       asl                                                                ; *2 for memory index
                        clc
                        adc          _enternote_tmpaddr
-                       adc          #1                                                   ; start with second value (note)
+                       adc          #1                                                    ; start with second value (note)
                        sta          _enternote_tmpaddr
 
 
                        GOXY         #18;#11
-                       lda          #2                                                   ; len in hex digits (nibbles)
+                       lda          #2                                                    ; len in hex digits (nibbles)
                        ldx          _enternote_tmpaddr
                        ldy          _enternote_tmpaddr+1
                        jsr          GetHexByteOrder
@@ -279,11 +435,11 @@ MAINKEY_ENTERNOTE
 
                        ldx          _enternote_tmpaddr
                        dex
-                       stx          _enternote_tmpaddr                                   ; uhhh.. decrement back to first value (duration)
+                       stx          _enternote_tmpaddr                                    ; uhhh.. decrement back to first value (duration)
 
 
                        GOXY         #18;#13
-                       lda          #2                                                   ; len in hex digits (nibbles)
+                       lda          #2                                                    ; len in hex digits (nibbles)
                        ldx          _enternote_tmpaddr
                        ldy          _enternote_tmpaddr+1
                        jsr          GetHexByteOrder
@@ -295,10 +451,10 @@ _enternote_tmpaddr     da           $1000
 MAINKEY_HELP           jsr          HOME
                        lda          #_strs_help_screen
                        ldy          #>_strs_help_screen
-                       ldx          #00                                                  ; horiz pos
+                       ldx          #00                                                   ; horiz pos
                        jsr          PrintStringsX
                        jsr          WaitKey
-                       jmp          MAIN                                                 ; need redraw!
+                       jmp          MAIN                                                  ; need redraw!
 
 
 
@@ -308,24 +464,24 @@ MAINKEY_LOAD
                        PRINTXY      #4;#21;_dlg_str_load
                        GOXY         #4;#22
                        jsr          GETLN1
-                                                                                         ; copy input buffer string to parameters string
+                                                                                          ; copy input buffer string to parameters string
                        jsr          StrBufToFilename
                        jsr          OpenFile
                        bcc          :open_success
-:error                 pha                                                               ; prodos MLI error (err code in A)
-                       cmp          #$46                                                 ; no such file
+:error                 pha                                                                ; prodos MLI error (err code in A)
+                       cmp          #$46                                                  ; no such file
                        beq          :error_no_file
 :error_other           PRINTXY      #4;#21;_dlg_str_load_e1
                        pla
-                       jsr          PRBYTE                                               ; $FDDA
-                       bne          :done_pause                                          ; BRA
+                       jsr          PRBYTE                                                ; $FDDA
+                       bne          :done_pause                                           ; BRA
 :error_no_file         PRINTXY      #4;#21;_dlg_str_load_e2
                        pla
                        jsr          WaitKey
-                       bne          :done                                                ; BRA
-:open_success          jsr          WipeSong                                             ; clear our buffer
+                       bne          :done                                                 ; BRA
+:open_success          jsr          WipeSong                                              ; clear our buffer
                        jsr          ks_get_songaddr
-                       sta          $0                                                   ; uses ZP $0
+                       sta          $0                                                    ; uses ZP $0
                        sty          $1
                        jsr          ReadFile
                        bcc          :read_success
@@ -333,21 +489,21 @@ MAINKEY_LOAD
 :read_success
 :done
                        jsr          CloseFile
-                       jmp          MAIN                                                 ; need redraw!
+                       jmp          MAIN                                                  ; need redraw!
 
 MAINKEY_SAVE
                        jsr          DrawDialogBox
                        PRINTXY      #4;#18;_dlg_str_save_h
                        PRINTXY      #4;#21;_dlg_str_save
                        GOXY         #4;#22
-                       jsr          GETLN1                                               ; get filename
-                                                                                         ; copy input buffer string to parameters string
+                       jsr          GETLN1                                                ; get filename
+                                                                                          ; copy input buffer string to parameters string
                        jsr          StrBufToFilename
                        jsr          CreateFile
                        bcc          :create_success
-:create_error          cmp          #$47                                                 ; dup filename - already created?
+:create_error          cmp          #$47                                                  ; dup filename - already created?
                        bne          :error_create_unknown
-:create_error_exists   jsr          DrawDialogBox                                        ; file exists, confirm save
+:create_error_exists   jsr          DrawDialogBox                                         ; file exists, confirm save
                        PRINTXY      #4;#18;_dlg_str_save_h
                        PRINTXY      #4;#21;_dlg_str_save_e1
                        jsr          RDKEY
@@ -355,48 +511,48 @@ MAINKEY_SAVE
                        beq          :got_y
                        cmp          #"y"
                        beq          :got_y
-                       bne          :done                                                ; can't rts, so use common exit
+                       bne          :done                                                 ; can't rts, so use common exit
 :got_y                 jmp          MAIN
 
-:error_create_unknown  pha                                                               ; prodos MLI error (err code in A)
+:error_create_unknown  pha                                                                ; prodos MLI error (err code in A)
 :error_other           PRINTXY      #4;#21;_dlg_str_save_e2
                        pla
-                       jsr          PRBYTE                                               ; $FDDA
-                       bne          :done_wait                                           ; BRA
-:create_success                                                                          ; FILE CREATED, NOW SAVE!
+                       jsr          PRBYTE                                                ; $FDDA
+                       bne          :done_wait                                            ; BRA
+:create_success                                                                           ; FILE CREATED, NOW SAVE!
                        jsr          OpenFile
                        bcc          :open_success
-:error_open            pha                                                               ; prodos MLI error (err code in A)
+:error_open            pha                                                                ; prodos MLI error (err code in A)
                        PRINTXY      #4;#21;_dlg_str_load_e2
                        pla
-                       jsr          PRBYTE                                               ; $FDDA
-                       bne          :done_wait                                           ; BRA
+                       jsr          PRBYTE                                                ; $FDDA
+                       bne          :done_wait                                            ; BRA
 :open_success          jsr          ks_get_songaddr
                        clc
-                       sta          $0                                                   ; uses ZP $0
+                       sta          $0                                                    ; uses ZP $0
                        sty          $1
                        ldy          #0
-:copy_loop             lda          ($0),y                                               ; copy song to iobuffer (should fit)
+:copy_loop             lda          ($0),y                                                ; copy song to iobuffer (should fit)
                        sta          IOBuffer,y
                        beq          :zero_byte
-                       iny                                                               ; we copy two bytes at a time for our song fmt
+                       iny                                                                ; we copy two bytes at a time for our song fmt
                        lda          ($0),y
                        sta          IOBuffer,y
                        bcc          :copy_loop
 :zero_byte             iny
-                       sta          IOBuffer,y                                           ; always copy the second part of this pair anyway
-                       sty          _write_request_count                                 ; file length
+                       sta          IOBuffer,y                                            ; always copy the second part of this pair anyway
+                       sty          _write_request_count                                  ; file length
                        jsr          WriteFile
                        bcc          :write_done
-:error_write           pha                                                               ; prodos MLI error (err code in A)
+:error_write           pha                                                                ; prodos MLI error (err code in A)
                        PRINTXY      #4;#21;_dlg_str_load_e2
                        pla
-                       jsr          PRBYTE                                               ; $FDDA
+                       jsr          PRBYTE                                                ; $FDDA
 :done_wait             jsr          WaitKey
 
 :write_done            jsr          CloseFile
 
-:done                  jmp          MAIN                                                 ; need redraw!
+:done                  jmp          MAIN                                                  ; need redraw!
 
 
 MAINKEY_NEW
@@ -409,16 +565,16 @@ MAINKEY_NEW
                        beq          :got_y
                        cmp          #"y"
                        beq          :got_y
-                       bne          :done                                                ; can't rts, so use common exit
+                       bne          :done                                                 ; can't rts, so use common exit
 :got_y                 jsr          WipeSong
 :done
-                       jmp          MAIN                                                 ; need redraw!
+                       jmp          MAIN                                                  ; need redraw!
 
 
 WipeSong               jsr          ks_get_songaddr
-                       sta          $0                                                   ; uses ZP $0
+                       sta          $0                                                    ; uses ZP $0
                        sty          $1
-                       ldy          #0                                                   ; ERASE LOOP
+                       ldy          #0                                                    ; ERASE LOOP
 :load                  lda          ($0),y
                        beq          :done
                        lda          #0
@@ -452,6 +608,12 @@ _alert_str_paste       asc          "Note pasted from clipboard.",00
 _alert_str_paste_p1    asc          "Pasted ",00
 _alert_str_paste_p2    asc          " notes from clipboard.",00
 _alert_str_paste_e1    asc          "No data in clipboard.",00
+_alert_str_insert      asc          "Note inserted.",00
+_alert_str_insert_p1   asc          "Inserted ",00
+_alert_str_insert_p2   asc          " notes.",00
+_alert_str_delete      asc          "Note deleted.",00
+_alert_str_delete_p1   asc          "Deleted ",00
+_alert_str_delete_p2   asc          " notes.",00
 
 _alert_str_clear       asc          "                                      ",00
 
@@ -469,21 +631,21 @@ LatchDummy             rts
 * NOTE: Be careful to preserve or restore A in your callback.  It is song index.
 * NOTE: Be careful clear on return.  carry set = stop playback.
 LatchTest
-                       pha                                                               ; preserve A
-                       lsr                                                               ; convert to ptr
-                       sta          ks_current_note_idx                                  ;save
+                       pha                                                                ; preserve A
+                       lsr                                                                ; convert to ptr
+                       sta          ks_current_note_idx                                   ;save
                        jsr          DrawNotes
                        lda          $c000
                        bpl          :no_key
-                       sta          $c010                                                ; clear key
-                       sec                                                               ; set return value (stop playback)
-                       pla                                                               ;restore A
+                       sta          $c010                                                 ; clear key
+                       sec                                                                ; set return value (stop playback)
+                       pla                                                                ;restore A
                        rts
-:no_key                clc                                                               ; set return value (normal)
-                       pla                                                               ;restore A
+:no_key                clc                                                                ; set return value (normal)
+                       pla                                                                ;restore A
                        rts
-ks_current_note_idx    db           0                                                    ; actual index to note data, i.e. - Note #i out of #127 notes in song
-                                                                                         ;
+ks_current_note_idx    db           0                                                     ; actual index to note data, i.e. - Note #i out of #127 notes in song
+                                                                                          ;
 
 
 
@@ -502,16 +664,16 @@ ks_current_note_idx    db           0                                           
 *   if past eof draw blank
 *  drawNote (x, noteToDraw)
 
-_drawing_note          db           0                                                    ; the note box on screen we are actively drawing
-_drawing_note_idx      db           0                                                    ;  - index of the note in song: N/255
-_drawing_note_dur      db           0                                                    ;  - its duration
-_drawing_note_val      db           0                                                    ;  - its value/frequency raw hex
-_drawing_note_str      da           ks_asc_UNKNOWN                                       ;  - pointer to string representing note value
-_drawing_note_xpos     db           0                                                    ;  - leftmost x position to draw its data
-_drawing_note_type     db           0                                                    ;  - 0=non-note (negative/>eof), 1=note, 2=eof
-_drawing_eof_hit       db           0                                                    ;  - !0 = we are at EOF, stop drawing notes
-_center_offset         =            4                                                    ; it's the 5 box on the screen
-_total_notes           =            9                                                    ; total board notes
+_drawing_note          db           0                                                     ; the note box on screen we are actively drawing
+_drawing_note_idx      db           0                                                     ;  - index of the note in song: N/255
+_drawing_note_dur      db           0                                                     ;  - its duration
+_drawing_note_val      db           0                                                     ;  - its value/frequency raw hex
+_drawing_note_str      da           ks_asc_UNKNOWN                                        ;  - pointer to string representing note value
+_drawing_note_xpos     db           0                                                     ;  - leftmost x position to draw its data
+_drawing_note_type     db           0                                                     ;  - 0=non-note (negative/>eof), 1=note, 2=eof
+_drawing_eof_hit       db           0                                                     ;  - !0 = we are at EOF, stop drawing notes
+_center_offset         =            4                                                     ; it's the 5 box on the screen
+_total_notes           =            9                                                     ; total board notes
 
 
 DrawNotes
@@ -521,28 +683,28 @@ DrawNotes
 
 :draw_note_loop
                        asl
-                       asl                                                               ; *4
+                       asl                                                                ; *4
                        clc
-                       adc          #2                                                   ; +2 :  should have correct xpos now
+                       adc          #2                                                    ; +2 :  should have correct xpos now
                        sta          _drawing_note_xpos
 
-                                                                                         ; NOW FIND OUT IF A REAL NOTE OR EMPTY BOX
-                       lda          ks_current_note_idx                                  ; actual song in note - starts at 0
+                                                                                          ; NOW FIND OUT IF A REAL NOTE OR EMPTY BOX
+                       lda          ks_current_note_idx                                   ; actual song in note - starts at 0
 
-                                                                                         ;  0      |1      |2      |3      |4
+                                                                                          ;  0      |1      |2      |3      |4
                        clc
-                       adc          _drawing_note                                        ;  0  1  2|0  1  2|0  1  2|0  1  2|0  1  2
-                                                                                         ;  0  1  2|1  2  3|2  3  4|3  4  5|4  5
-                       sec                                                               ; ?
-                       sbc          #_center_offset                                      ; -4 -4 -4|-4-4 -4|-4-4 -4|-4-4 -4|-4-4 -4
-                                                                                         ; -4 -3 -2|-3-2 -1|-2-1  0|-1 0  1|0  1  2
-                       bcs          :draw_me                                             ; carry gets cleared when underflow, right?
+                       adc          _drawing_note                                         ;  0  1  2|0  1  2|0  1  2|0  1  2|0  1  2
+                                                                                          ;  0  1  2|1  2  3|2  3  4|3  4  5|4  5
+                       sec                                                                ; ?
+                       sbc          #_center_offset                                       ; -4 -4 -4|-4-4 -4|-4-4 -4|-4-4 -4|-4-4 -4
+                                                                                          ; -4 -3 -2|-3-2 -1|-2-1  0|-1 0  1|0  1  2
+                       bcs          :draw_me                                              ; carry gets cleared when underflow, right?
 
-:negative_note                                                                           ; no need to store A since we aren't working on a real note
-                       jsr          DrawBlankNote                                        ; but draw a blank spot
+:negative_note                                                                            ; no need to store A since we aren't working on a real note
+                       jsr          DrawBlankNote                                         ; but draw a blank spot
                        bra          :next_note
-:draw_me                                                                                 ; A should have note to draw
-                                                                                         ;pha
+:draw_me                                                                                  ; A should have note to draw
+                                                                                          ;pha
                        jsr          DrawOneNote
 
 :next_note
@@ -556,12 +718,12 @@ DrawNotes
 * Enter with A as index to song note to draw
 DrawOneNote
                        sta          _drawing_note_idx
-                       asl                                                               ;*2
+                       asl                                                                ;*2
                        tax
-                       jsr          ks_get_songvalue                                     ; get duration
+                       jsr          ks_get_songvalue                                      ; get duration
                        beq          :eof_hit
                        sta          _drawing_note_dur
-                       inx                                                               ; +1 for note (0 is get duration above)
+                       inx                                                                ; +1 for note (0 is get duration above)
                        jsr          ks_get_songvalue
                        sta          _drawing_note_val
                        ldx          #0
@@ -579,7 +741,7 @@ DrawOneNote
 
                        bra          :now_draw
 :eof_hit               lda          _drawing_eof_hit
-                       bne          :been_done                                           ; we already hit eof before, so we just need to draw a blank
+                       bne          :been_done                                            ; we already hit eof before, so we just need to draw a blank
                        inc          _drawing_eof_hit
                        ldy          #>ks_asc_END
                        sty          _drawing_note_str+1
@@ -588,11 +750,11 @@ DrawOneNote
                        stz          _drawing_note_dur
                        stz          _drawing_note_val
                        bra          :now_draw
-:been_done             jmp          DrawBlankNote                                        ; THIS WILL POP OUT (RTS) directly from DrawBlankNote
+:been_done             jmp          DrawBlankNote                                         ; THIS WILL POP OUT (RTS) directly from DrawBlankNote
 
 :found_note
                        txa
-                       asl                                                               ; *2 for str ptr into list
+                       asl                                                                ; *2 for str ptr into list
                        tax
                        lda          ks_note_str3_tbl+1,x
                        sta          _drawing_note_str+1
@@ -600,19 +762,19 @@ DrawOneNote
                        sta          _drawing_note_str
 
 :now_draw
-                       ldx          _drawing_note_xpos                                   ; draw note num
+                       ldx          _drawing_note_xpos                                    ; draw note num
                        ldy          #LAYOUT_NOTENUM_Y
                        jsr          GoXY
                        lda          _drawing_note_idx
 
-                       tax                                                               ; for BINtoBCD
-                       ldy          #0                                                   ; for BINtoBCD
+                       tax                                                                ; for BINtoBCD
+                       ldy          #0                                                    ; for BINtoBCD
                        jsr          BINtoBCD
-                       txa                                                               ; for PRNUM
-                       jsr          PRNUM                                                ; MY SPECIAL SAUCE
+                       txa                                                                ; for PRNUM
+                       jsr          PRNUM                                                 ; MY SPECIAL SAUCE
 
 
-                       ldx          _drawing_note_xpos                                   ; draw note str
+                       ldx          _drawing_note_xpos                                    ; draw note str
                        ldy          #LAYOUT_NOTESTR_Y
                        jsr          GoXY
                        lda          _drawing_note_str
@@ -620,23 +782,23 @@ DrawOneNote
                        jsr          PrintString
 
 
-                       ldx          _drawing_note_xpos                                   ; draw note val
+                       ldx          _drawing_note_xpos                                    ; draw note val
                        ldy          #LAYOUT_NOTEVAL_Y
                        jsr          GoXY
                        lda          _drawing_note_val
-                       jsr          PRBYTE                                               ; $FDDA
+                       jsr          PRBYTE                                                ; $FDDA
 
 
-                       ldx          _drawing_note_xpos                                   ; draw note dur
+                       ldx          _drawing_note_xpos                                    ; draw note dur
                        ldy          #LAYOUT_NOTEDUR_Y
                        jsr          GoXY
                        lda          _drawing_note_dur
-                       jsr          PRBYTE                                               ; $FDDA
+                       jsr          PRBYTE                                                ; $FDDA
 
                        rts
 
 DrawBlankNote
-                       ldx          _drawing_note_xpos                                   ; clear note num
+                       ldx          _drawing_note_xpos                                    ; clear note num
                        ldy          #LAYOUT_NOTENUM_Y
                        jsr          GoXY
                        lda          #ks_asc_BLANK
@@ -644,7 +806,7 @@ DrawBlankNote
                        jsr          PrintString
 
 
-                       ldx          _drawing_note_xpos                                   ; clear note str
+                       ldx          _drawing_note_xpos                                    ; clear note str
                        ldy          #LAYOUT_NOTESTR_Y
                        jsr          GoXY
                        lda          #ks_asc_BLANK
@@ -652,7 +814,7 @@ DrawBlankNote
                        jsr          PrintString
 
 
-                       ldx          _drawing_note_xpos                                   ; clear note val
+                       ldx          _drawing_note_xpos                                    ; clear note val
                        ldy          #LAYOUT_NOTEVAL_Y
                        jsr          GoXY
                        lda          #ks_asc_BLANK
@@ -660,7 +822,7 @@ DrawBlankNote
                        jsr          PrintString
 
 
-                       ldx          _drawing_note_xpos                                   ; clear note dur
+                       ldx          _drawing_note_xpos                                    ; clear note dur
                        ldy          #LAYOUT_NOTEDUR_Y
                        jsr          GoXY
                        lda          #ks_asc_BLANK
@@ -672,41 +834,41 @@ DrawNoteBoard
                        GOXY         #0;#8
                        lda          #_strs_note_board
                        ldy          #>_strs_note_board
-                       ldx          #01                                                  ; horiz pos
-                       jsr          PrintStringsX                                        ; someone should make a XY version ;)
+                       ldx          #01                                                   ; horiz pos
+                       jsr          PrintStringsX                                         ; someone should make a XY version ;)
                        rts
 
 DrawDialogBox
                        GOXY         #0;#18
                        lda          #_strs_dialog_box
                        ldy          #>_strs_dialog_box
-                       ldx          #01                                                  ; horiz pos
-                       jsr          PrintStringsX                                        ; someone should make a XY version ;)
+                       ldx          #01                                                   ; horiz pos
+                       jsr          PrintStringsX                                         ; someone should make a XY version ;)
                        rts
 
 DrawMenuBackground     jsr          HOME
                        lda          #_strs_ksynthed_title
                        ldy          #>_strs_ksynthed_title
-                       ldx          #00                                                  ; horiz pos
+                       ldx          #00                                                   ; horiz pos
                        jsr          PrintStringsX
 
                        GOXY         #0;#18
                        lda          #_strs_cheat_sheet
                        ldy          #>_strs_cheat_sheet
-                       ldx          #00                                                  ; horiz pos
-                       jsr          PrintStringsX                                        ; someone should make a XY version ;)
+                       ldx          #00                                                   ; horiz pos
+                       jsr          PrintStringsX                                         ; someone should make a XY version ;)
 
                        rts
 
 DrawNoteCount          GOXY         #32;#2
                        jsr          ks_get_songlen
-                       lsr                                                               ; /2 for note count
+                       lsr                                                                ; /2 for note count
 
-                       tax                                                               ; for BINtoBCD
-                       ldy          #0                                                   ; for BINtoBCD
+                       tax                                                                ; for BINtoBCD
+                       ldy          #0                                                    ; for BINtoBCD
                        jsr          BINtoBCD
-                       txa                                                               ; for PRNUM
-                       jsr          PRNUM                                                ; MY SPECIAL SAUCE
+                       txa                                                                ; for PRNUM
+                       jsr          PRNUM                                                 ; MY SPECIAL SAUCE
 
                        rts
 
@@ -770,7 +932,7 @@ SetSongBFlatScale
 * I.e. - This will work even if we completely change players as long as it respects our note format.
 SongOneNote            asc          FF,FF,00,00
 SongOneNoteEnd         =            *-SongOneNote
-SongOneNoteStash       da           SongOneNote                                          ; for backup of real song we swap in/out
+SongOneNoteStash       da           SongOneNote                                           ; for backup of real song we swap in/out
 
 
 SongKarateka           asc          10,a8,20,FF,08,c7,05,FF,10,a8,15,FF,25,7e,20,FF,10,63,08,FF,80,63,00,00
@@ -778,8 +940,9 @@ SongKaratekaEnd        =            *-SongKarateka
 
 SongBFlatScale         asc          20,A9,20,96,20,86,20,7E,20,71,20,64,20,59,20,54,20,59,20,64,20,71,20,7E,20,86,20,96,FF,A9,FF,FF,10,A9,10,86,10,71,10,54,10,71,10,86,FF,A9,00,00
 SongBFlatScaleEnd      =            *-SongBFlatScale
+                       ds           \
 SongSpace              ds           1024
-                       dw           0000                                                 ; buffer
+                       dw           0000                                                  ; buffer
 
 
 
@@ -906,7 +1069,7 @@ ks_asc_FF              asc          "RST",00
 ks_asc_END             asc          "END",00
 ks_asc_UNKNOWN         asc          "-?-",00
 ks_asc_NONOTE          asc          "XXX",00
-ks_asc_NEGATIVE        asc          "***",00                                             ; really just for debugging visibility
+ks_asc_NEGATIVE        asc          "***",00                                              ; really just for debugging visibility
 ks_asc_BLANK           asc          "   ",00
 
 
