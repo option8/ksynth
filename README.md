@@ -1,7 +1,25 @@
 # KSynth
 Beginnings of a dual tone synthesizer for the Apple II
 
-All the code is in this README, since it's small enough to copy and paste into an emulator for now.
+All the code is in this README, since it's small enough to copy and paste into an emulator for now. There is also a Merlin32 compatible source file, ksynth.s, with comments and equivalents to make it more relocatable.
+
+The included DSK file contains the following files:
+
+- *KSYNTH*: The core sound generation routine
+- *KSYNTH.PLAYER*: Basic player routine. Assumes SONG bytes starting at $1000
+- *BFLATSCALE.SONG*: B-Flat scale
+- *VICTORY.SONG*: "Victory" tune from Karateka    
+- *DAISYBELL.SONG*: "Bicylce Built for Two" AKA "Daisy Bell"  
+- *DAISYBELL.MIDI*: "Bicylce Built for Two" AKA "Daisy Bell" in MIDI-like format for KSYNTH.MIDI
+- *KSYNTH.MIDI*: MIDI-style KSYNTH player routine. Looks up notes from MIDI.LOOKUP instead of raw cycle counts.     
+- *MIDI.LOOKUP*: Lookup table of notes to cycle counts for MIDI style player.     
+- *RANDOMNOTES*: A routine to play random tones with the KSYNTH routine.
+- *MIDI.LOOKUP2*: Alternate MIDI lookup table that covers larger range of tones
+- *TWOTONE.PLAYER*: Slightly different MIDI-style player. Plays arbitrary two-note combinations.
+
+To do: Add more MIDI example songs.
+
+
 
 The synth code itself
 
@@ -129,6 +147,8 @@ Using the above table as a starting point, a MIDI lookup table can be created. M
 By shifting 12 bytes up or down (one octave), a song's range can be easily be changed to fit in KSYNTH's limited range.
 
 ```
+notes and octaves
+
   C  C# D  D# E  F  F# G  G# A  A# B
 0 00 00 00 00 00 00 00 00 00 00 00 00 
 1 00 00 00 00 00 00 00 00 00 00 00 00 
@@ -141,11 +161,27 @@ By shifting 12 bytes up or down (one octave), a song's range can be easily be ch
 8 00 00 00 00 00 00 00 00 00 00 00 00 
 9 00 00 00 00 00 00 00 00
 
+
+bytes 
+
+$30	00 00 00 FC EF E1 D5 C9 BD B3 A9 9F 96 8E 86 7E
+$40	77 71 6A 64 5E 59 54 4F 4B 47 43 3F 3C 38 35 32
+$50	2F 2D 2A 27 25 23 21 1F 1E 1C 1A 19 17 16 15 13
+
+
 1133: FC EF E1 D5 C9 BD B3 A9 9F 96 8E 86 7E 77 71 6A 64 5E 59 54 4F 4B 47 43 3F 3C 38 35 32 2F 2D 2A 27 25 23 21 1F 1E 1C 1A 19 17 16 15 13
 ```
 
+##Daisy Bell (Bicycle Built For Two) MIDI style##
 
-##MIDI-like Player##
+1000: 30 41 30 3E 30 3A 30 35 10 37 10 39 10 3A 20 37 10 3A 60 35 30 3C 30 41 30 3E 30 3A 10 37 10 39 10 3A 20 3C 10 3E 40 3C 10 FF 10 3E 10 40 10 3E 
+1030: 10 3C 20 41 10 3E 10 3C 40 3A 10 3C 20 3E 10 3A 20 37 10 3A 10 37 40 35 10 35 20 3A 10 3E 10 3C 20 FF 20 3A 10 3E 10 3C 10 FF 5 3E 5 40 10 41 10 3E 10 3A 20 3C 10 35 40 3A 00 00
+
+
+
+
+
+##KSYNTH.MIDI: MIDI-like Player##
 
 _assumes song src at $1000_
 
@@ -154,40 +190,39 @@ _assumes lookup table src at $1100_
 
 ```
 0330-   A9 00       LDA   #$00		;	start at zero
-0332-   AA          TAX				;	X = 0; LOOP
+0332-   AA          TAX				;	X = 0	; LOOP
 0333-   BD 00 10    LDA   $1000,X	;	load note duration
-0336-   F0 31       BEQ   $0369		;	if note is 0 duration, end the song
+0336-   F0 35       BEQ   $036D		;	if note is 0 duration, end the song
 0338-   85 FA       STA   $FA		;	store duration at $FA
 033A-   E8          INX				;	increment pointer to note value
 033B-   BD 00 10    LDA   $1000,X	;	load note MIDI-style value
-					TAY				;	lookup note loop value from lookup table
-					LDA $1100,Y		;
-033E-   85 FB       STA   $FB		;	store note value at $FB
-0340-   85 FD       STA   $FD		; 	store note value at $FD
-0342-   C9 FF       CMP   #$FF		;	if note value is FF, rest
-0344-   D0 06       BNE   $034C		;	skip over if !=FF
-0346-   8D 1E 03    STA   $031E		;	change the $C030 click to BIT $FF30	
-0349-   8D 13 03    STA   $0313		;	change the $C030 click to BIT $FF30	
-034C-   C6 FD       DEC   $FD		;	decrement $FD for That Karateka Sound™
-034E-   8A          TXA				;	put current note pointer in Accumulator
-034F-   85 FF       STA   $FF		;	store that in $FF						
-0351-   20 00 03    JSR   $0300		;	play the actual note
-0354-   AD 13 03    LDA   $0313		;	did we mess with the C030 click?
-0357-   C9 FF       CMP   #$FF		;	if it's FF, we did. change it back.
-0359-   D0 08       BNE   $0363		;	skip if !=FF
-035B-   A9 C0       LDA   #$C0		;	set click points back to $c030
-035D-   8D 1E 03    STA   $031E		;
-0360-   8D 13 03    STA   $0313		;	
-0363-   E6 FF       INC   $FF		;	increment to next note address
-0365-   A5 FF       LDA   $FF		;	load Accumulator with next note address
-0367-   D0 C9       BNE   $0332		;	branch to LOOP
-0369-   60          RTS				;
+033E-   A8          TAY				;	lookup note loop value from lookup table
+033F-   B9 00 11    LDA   $1100,Y	;
+0342-   85 FB       STA   $FB		;	store note value at $FB
+0344-   85 FD       STA   $FD		; 	store note value at $FD
+0346-   C9 FF       CMP   #$FF		;	if note value is FF, rest
+0348-   D0 06       BNE   $0350		;	skip over if !=FF
+034A-   8D 1E 03    STA   $031E		;	change the $C030 click to BIT $FF30	
+034D-   8D 13 03    STA   $0313		;	change the $C030 click to BIT $FF30	
+0350-   C6 FD       DEC   $FD		;	decrement $FD for That Karateka Sound™
+0352-   8A          TXA				;	put current note pointer in Accumulator
+0353-   85 FF       STA   $FF		;	store that in $FF						
+0355-   20 00 03    JSR   $0300		;	play the actual note
+0358-   AD 13 03    LDA   $0313		;	did we mess with the C030 click?
+035B-   C9 FF       CMP   #$FF		;	if it's FF, we did. change it back.
+035D-   D0 08       BNE   $0367		;	skip if !=FF
+035F-   A9 C0       LDA   #$C0		;	set click points back to $c030
+0361-   8D 1E 03    STA   $031E		;
+0364-   8D 13 03    STA   $0313		;	
+0367-   E6 FF       INC   $FF		;	increment to next note address
+0369-   A5 FF       LDA   $FF		;	load Accumulator with next note address
+036B-   D0 C5       BNE   $0332		;	branch to LOOP
+036D-   60          RTS				;
 
-
-330: A9 00 AA BD 00 10 F0 31 85 FA E8 BD 00 10 A8 B9 00 11 85 FB 85 FD C9 FF D0 06 8D 1E 03 8D 13 03 C6 FD 8A 85 FF 20 00 03 AD 13 03 C9 FF D0 08 A9 C0 8D 1E 03 8D 13 03 E6 FF A5 FF D0 C9 60       
-
-
+330: A9 00 AA BD 00 10 F0 35 85 FA E8 BD 00 10 A8 B9 00 11 85 FB 85 FD C9 FF D0 06 8D 1E 03 8D 13 03 C6 FD 8A 85 FF 20 00 03 AD 13 03 C9 FF D0 08 A9 C0 8D 1E 03 8D 13 03 E6 FF A5 FF D0 C5 60       
 
 
 
-This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]
+
+
+This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 United States License. [http://creativecommons.org/licenses/by-sa/3.0/us/]*
