@@ -1,8 +1,4 @@
 
-
-** API
-** LOAD FILE: da LOCATION ($2), dw MAXLEN ($4)
-** SAVE FILE: da LOCATION, da FNAMEPTR, dw LENGTH
 * CALL AFTER GETLN() to copy string to ProDOS parm
 StrBufToFilename
                       stx   _filename
@@ -17,9 +13,6 @@ StrBufToFilename
                       bne   :loop          ; BRA
 :done                 rts
 
-
-HiScoreHi             db    0
-HiScoreLo             db    0
 
 ** This is an example string for assembly
 ** We can overwrite it, but must use str format (leading length byte)
@@ -78,7 +71,6 @@ ReadFile
 
 
 
-
 CloseFile
                       lda   OpenRefNum
                       sta   CloseRefNum
@@ -89,87 +81,7 @@ CloseFile
 
 
 
-**** OLD ROUTINES
-
-LoadFile              jsr   CreateFile
-                      bcs   :error
-                      jsr   OpenFile
-                      bcs   :error
-                      jsr   ReadFile
-                      jsr   CloseFile
-:error                rts
-
-SaveFile              jsr   CreateFile
-                      jsr   OpenFile
-                      bcc   :noError
-                      rts
-:noError              jsr   WriteFile
-                      jsr   CloseFile
-                      rts
-
-CreateFileOdd
-                      jsr   MLI
-                      dfb   $C0
-                      da    CreateFileParam
-                      bcs   :error
-                      rts
-:error                cmp   #$47           ; dup filename - already created?
-                      bne   :bail
-                      clc                  ; this is ok, clear error state
-:bail                 rts                  ; oh well... just carry on in session
-
-OpenFileOdd
-                      jsr   MLI
-                      dfb   $C8            ; OPEN P8 request ($C8)
-                      da    OpenFileParam
-                      bcc   :noError
-                      brk   $10
-                      cmp   $46            ; "$46 - File not found"
-                      beq   CreateFileOdd  ; let's create it if we can and try again
-                      rts                  ; return with error state
-:noError              rts
-
-
-ReadFileOdd
-                      lda   #0
-                      sta   IOBuffer
-                      sta   IOBuffer+1     ;zero load area, just in case
-                      lda   OpenRefNum
-                      sta   ReadRefNum
-                      jsr   MLI
-                      dfb   $CA            ; READ P8 request ($CA)
-                      da    ReadFileParam
-                      bcs   :readFail
-
-                      lda   ReadResult
-                      lda   IOBuffer
-                      sta   HiScoreHi
-                      lda   IOBuffer+1
-                      sta   HiScoreLo
-                      rts
-
-:readFail             cmp   #$4C           ;eof - ok on new file
-                      beq   :giveUp
-
-                      brk   $99            ; uhm
-:giveUp               rts                  ; return with error state
-
-WriteFileOdd
-                      lda   HiScoreHi
-                      sta   IOBuffer
-                      lda   HiScoreLo
-                      sta   IOBuffer+1
-                      lda   OpenRefNum
-                      sta   WriteRefNum
-                      jsr   MLI
-                      dfb   $CB            ; READ P8 request ($CB)
-                      da    WriteFileParam
-                      bcs   :writeFail
-                      lda   WriteResult
-:writeFail
-                      rts
-
-
+** PRODOS PARAMETER TABLES
 OpenFileParam
                       dfb   #$03           ; number of parameters
                       dw    _filename
@@ -228,4 +140,3 @@ QuitParm              dfb   4              ; number of parameters
 
                       ds    \
 IOBuffer              ds    512
-

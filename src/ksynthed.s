@@ -53,6 +53,8 @@ MAIN                   jsr          DrawMenuBackground                          
                        jsr          DrawNoteBoard
 
 MAIN_DRAW_NOTES        jsr          DrawNoteCount                                         ; MENU REENTRY #2 - Only render note data
+                       jsr          DrawOctave
+                       jsr          DrawVKMode
                        jsr          DrawNotes
 
 MAIN_NO_DRAW                                                                              ; MENU REENTRY #3 - Render nothing
@@ -65,6 +67,13 @@ MAIN_NO_DRAW                                                                    
                                                                                           ; HACK ALERT : this is where we clear alert messages,
                                                                                           ; and do stuff, because reasons...
                        jsr          MAIN_CLEAR_ALERTS                                     ; erases any "old" info/alert-y stuff
+                       lda          vk_mode
+                       beq          :vk_mode_off
+:vk_mode_on            jsr          VK_KEY_HIT                                            ; let VK take first pass at key
+                       lda          MAIN_KEY_HIT
+                       beq          MAIN_DRAW_NOTES
+:vk_mode_off                                                                              ; just handle everything normally
+
                        lda          MAIN_KEY_HIT
                        cmp          #$83
                        beq          :keep_repeat
@@ -105,18 +114,22 @@ MAIN_NO_DRAW                                                                    
 
 MAIN_KEY_HIT           db           0                                                     ; store last key hit in buffer
 MAIN_KEY_TABLE         asc          90," ",8D                                             ; 90 = CTRL-P
-                       asc          8C,93,8E                                              ; 8C=^L  93=^S  8E=^N
+                       asc          8C,93,8E,91                                              ; 8C=^L  93=^S  8E=^N  91=^Q
                        asc          83,96                                                 ; 83=^C  96=^V
                        asc          89,84,F2,F5                                           ; 89=^I  84=^D  F2=Ins  F5=Del
                        asc          #KEY_LTARROW,#KEY_RTARROW
+                       asc          "[","]"
+                       asc          8B                                                    ; 8B=^K
                        asc          "?","h","H"
                        asc          B1,B2,B3,B4,B5,B6,B7,B8,B9                            ; number keys
                        asc          "b",00
 MAIN_KEY_JUMP_TABLE    da           MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKEY_ENTERNOTE-1
-                       da           MAINKEY_LOAD-1,MAINKEY_SAVE-1,MAINKEY_NEW-1
+                       da           MAINKEY_LOAD-1,MAINKEY_SAVE-1,MAINKEY_NEW-1,MAINKEY_QUIT-1
                        da           MAINKEY_COPY-1,MAINKEY_PASTE-1
                        da           MAINKEY_INSERT-1,MAINKEY_DELETE-1,MAINKEY_INSERT-1,MAINKEY_DELETE-1
                        da           MAINKEY_LEFT-1,MAINKEY_RIGHT-1
+                       da           MAINKEY_OCTAVEDOWN-1,MAINKEY_OCTAVEUP-1
+                       da           MAINKEY_VKMODE-1
                        da           MAINKEY_HELP-1,MAINKEY_HELP-1,MAINKEY_HELP-1
                        da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1             ; a (tiny space) waste, but whatevs...
                        da           MAINKEY_NUM-1,MAINKEY_NUM-1,MAINKEY_NUM-1             ; it saves on me writing buggy code
@@ -124,13 +137,114 @@ MAIN_KEY_JUMP_TABLE    da           MAINKEY_PLAYSONG-1,MAINKEY_PLAYNOTE-1,MAINKE
                        da           SetSongBFlatScale-1
 
 
+
+
 MAIN_CLEAR_ALERTS      PRINTXY      #0;#LAYOUT_ALERT_Y;_alert_str_clear
                        rts
+
 MAIN_CLEAR_REPEAT      lda          #1
                        sta          _num_repeat                                           ; clear these "hot" repeat keys
                        rts
+
+
 ***************************************
 ** KEY HANDLER ROUTINES START
+
+* z=FA Z=DA so #$20  Within C1-DA "A-Z" or within E1-FA "a-z"
+VK_KEY_HIT             lda          MAIN_KEY_HIT
+                       cmp          #$8D
+                       bne          :not_return
+:return_hit            lda          vk_note_value
+                       bne          :commit
+                       rts
+:commit                jsr          VK_COMMIT_NOTE
+                       lda          #0
+                       sta          vk_note_duration
+                       sta          vk_note_value
+                       sta          MAIN_KEY_HIT                                          ; clear return from keybuffer
+                       rts
+
+:not_return            cmp          #$E1
+                       bcc          :not_lower                                            ; BLT
+                       cmp          #$FB                                                  ; 'a'+1
+                       bcs          :not_lower                                            ; BGE
+                       sec
+                       sbc          #$20                                                  ; make uppercase
+                       bcc          :handle_alpha                                         ; BRA
+:not_lower             cmp          #$C1
+                       bcc          :bad_key                                              ; BLT
+                       cmp          #$DB
+                       bcs          :bad_key                                              ; bge
+
+:handle_alpha          sta          vk_key
+                       ldx          #0                                                    ; first get key index if it's a "piano" key
+:search_loop           lda          vk_keymap,x
+                       beq          :bad_key                                              ; key not found
+                       cmp          vk_key
+                       beq          :found_index
+                       inx
+                       bne          :search_loop
+
+:found_index           sec
+                       lda          vk_octave
+                       cmp          #1
+                       beq          :oct1
+                       cmp          #2
+                       beq          :oct2
+                       cmp          #3
+                       beq          :oct3
+:oct4                  lda          vk_o4,x
+                       bcs          :got_value                                            ; BRA
+:oct3                  lda          vk_o3,x
+                       bcs          :got_value                                            ; BRA
+:oct2                  lda          vk_o2,x
+                       bcs          :got_value                                            ; BRA
+:oct1                  lda          vk_o1,x
+                       bcs          :got_value                                            ; BRA
+
+:got_value             sta          vk_note_value
+                       sta          SongOneNote+1
+                       lda          vk_mode
+                       sta          vk_note_duration
+                       sta          SongOneNote
+                       lda          vk_note_value                                         ; in case of zero value (bottom of oct 0 scale)
+                       beq          :bad_key
+                       PRINTXY      #1;#LAYOUT_ALERT_Y;_alert_str_vk_note_p1
+                       lda          vk_note_value
+                       jsr          PRBYTE
+                       PRINTSTRING  _alert_str_vk_note_p2
+
+                       jsr          PlaySongOneNote
+                       lda          #0
+                       sta          MAIN_KEY_HIT                                          ; clear key because we did something with it
+                       beq          :done                                                 ; BRA
+
+:bad_key               lda          #0
+                       sta          vk_note_value
+                       sta          vk_note_duration
+                                                                                          ; munge return key value?
+:done                  lda          MAIN_KEY_HIT
+                       rts
+
+** Saves the last note as current song note
+VK_COMMIT_NOTE         lda          ks_current_note_idx
+                       asl
+                       tax
+                       lda          vk_note_duration
+                       jsr          ks_set_songvalue
+                       inx
+                       lda          vk_note_value
+                       jsr          ks_set_songvalue
+                       rts
+
+
+vk_key                 db           0                                                     ; will be an alpha upper if we got one
+vk_note_value          db           0
+vk_note_duration       db           0
+
+
+MAINKEY_QUIT  jmp Quit  ; WE OUT!
+
 
 MAINKEY_PLAYSONG       jsr          ks_player_latched                                     ; included from ksynth_inc.s
                        jmp          MAIN_NO_DRAW
@@ -153,6 +267,34 @@ MAINKEY_RIGHT          lda          ks_current_note_idx                         
 :no_inc                jmp          MAIN_DRAW_NOTES
 
 
+MAINKEY_VKMODE         lda          vk_mode
+                       cmp          #$40
+                       bne          :inc
+:wrap                  lda          #0
+                       sta          vk_mode                                               ; we hit #$40 so wrap to 0
+                       beq          :done
+:inc                   clc
+                       adc          #$10                                                  ; go up by #$10
+                       sta          vk_mode
+:done                  jmp          MAIN_DRAW_NOTES
+
+
+MAINKEY_OCTAVEUP
+                       lda          vk_octave
+                       cmp          #4                                                    ; max octave (1-4)
+                       beq          :done
+                       inc          vk_octave
+:done                  jmp          MAIN_DRAW_NOTES
+
+
+MAINKEY_OCTAVEDOWN
+                       lda          vk_octave
+                       cmp          #1                                                    ; max octave (1-4)
+                       beq          :done
+                       dec          vk_octave
+:done                  jmp          MAIN_DRAW_NOTES
+
+
 MAINKEY_PLAYNOTE       lda          ks_current_note_idx
                        ASL
                        TAX
@@ -161,20 +303,9 @@ MAINKEY_PLAYNOTE       lda          ks_current_note_idx
                        INX
                        jsr          ks_get_songvalue
                        sta          SongOneNote+1                                         ; copy note value
-
-                       jsr          ks_get_songaddr
-                       pha                                                                ; save A (address part)
-                       tya
-                       pha                                                                ; save Y (address part)
-                       lda          #SongOneNote
-                       ldy          #>SongOneNote
-                       jsr          ks_setsong
-                       jsr          ks_player
-                       pla
-                       tay                                                                ;restore Y (address part)
-                       pla                                                                ;restore A (address part)
-                       jsr          ks_setsong
+                       jsr          PlaySongOneNote
                        jmp          MAIN_NO_DRAW
+
 
 MAINKEY_NUM            lda          MAIN_KEY_HIT
                        sec
@@ -338,8 +469,8 @@ MAINKEY_DELETE         jsr          ks_get_songlen                              
                        tay
                        iny
                        iny                                                                ; we want to copy eof bytes
-                       sty _insert_stop ; re-use _insert_stop as "_delete_stop"
-                       ldy #0
+                       sty          _insert_stop                                          ; re-use _insert_stop as "_delete_stop"
+                       ldy          #0
 
                                                                                           ; E)
 :copy_loop             lda          ($2),y
@@ -351,7 +482,7 @@ MAINKEY_DELETE         jsr          ks_get_songlen                              
                        cpy          _insert_stop
                        bne          :copy_loop
 
-                                                                        ; F)
+                                                                                          ; F)
                        ldx          _num_repeat
 :clear_loop            lda          #$00
                        sta          ($0),y                                                ; using src ptr for writes now because we are pointed
@@ -601,6 +732,9 @@ _dlg_str_save_e2       asc          "Error saving file. ",00
 _dlg_str_new_h         asc          ".NEW.",00
 _dlg_str_new           asc          "Create a new song (y/N)? ",00
 
+_alert_str_vk_note_p1  asc          "KB Note: ",00
+_alert_str_vk_note_p2  asc          "   Hit enter to commit.",00
+
 _alert_str_copy        asc          "Note copied to clipboard.",00
 _alert_str_copy_p1     asc          "Copied ",00
 _alert_str_copy_p2     asc          " notes to clipboard.",00
@@ -702,7 +836,8 @@ DrawNotes
 
 :negative_note                                                                            ; no need to store A since we aren't working on a real note
                        jsr          DrawBlankNote                                         ; but draw a blank spot
-                       bra          :next_note
+                       sec
+                       bcs          :next_note                                            ; BRA
 :draw_me                                                                                  ; A should have note to draw
                                                                                           ;pha
                        jsr          DrawOneNote
@@ -738,8 +873,8 @@ DrawOneNote
                        sty          _drawing_note_str+1
                        lda          #ks_asc_UNKNOWN
                        sta          _drawing_note_str
-
-                       bra          :now_draw
+                       sec
+                       bcs          :now_draw                                             ; BRA
 :eof_hit               lda          _drawing_eof_hit
                        bne          :been_done                                            ; we already hit eof before, so we just need to draw a blank
                        inc          _drawing_eof_hit
@@ -749,7 +884,8 @@ DrawOneNote
                        sta          _drawing_note_str
                        stz          _drawing_note_dur
                        stz          _drawing_note_val
-                       bra          :now_draw
+                       sec
+                       bcs          :now_draw                                             ; BRA
 :been_done             jmp          DrawBlankNote                                         ; THIS WILL POP OUT (RTS) directly from DrawBlankNote
 
 :found_note
@@ -872,6 +1008,25 @@ DrawNoteCount          GOXY         #32;#2
 
                        rts
 
+DrawOctave             GOXY         #22;#2
+                       lda          vk_octave
+                       jsr          PRHEX
+                       rts
+
+DrawVKMode             GOXY         #10;#2
+                       lda          vk_mode
+                       bne          :not0
+:off                   PRINTSTRING  ks_asc_OFF
+                       sec
+                       bcs          :done                                                 ; BRA
+:not0                  jsr          PRBYTE
+                       lda          #" "                                                  ; "
+                       jsr          COUT                                                  ; right pad to overwrite last F of "OFF"
+:done                  rts
+
+
+
+
 FancyWait              lda          _fw_status
                        bne          :check1
 :got0                  PRINTXY      #14;#0;_fw_s0
@@ -930,6 +1085,23 @@ SetSongBFlatScale
 * changes to the player and tone generator code, or using a priori knowledge of
 * the engine internals.
 * I.e. - This will work even if we completely change players as long as it respects our note format.
+
+** Plays one note song and returns pointer to real song after
+PlaySongOneNote
+                       jsr          ks_get_songaddr
+                       pha                                                                ; save A (address part)
+                       tya
+                       pha                                                                ; save Y (address part)
+                       lda          #SongOneNote
+                       ldy          #>SongOneNote
+                       jsr          ks_setsong
+                       jsr          ks_player
+                       pla
+                       tay                                                                ;restore Y (address part)
+                       pla                                                                ;restore A (address part)
+                       jsr          ks_setsong
+                       rts
+
 SongOneNote            asc          FF,FF,00,00
 SongOneNoteEnd         =            *-SongOneNote
 SongOneNoteStash       da           SongOneNote                                           ; for backup of real song we swap in/out
@@ -947,23 +1119,8 @@ SongSpace              ds           1024
 
 
 _strs_ksynthed_title   asc          "                KSYNTHED  ",8D,8D,00
-                       asc          " Song:                    Notes:   /127",00,00
+                       asc          " KB Mode:        Oct:     Notes:   /127",00,00
 
-
-_strs_cheat_sheet      asc          "   C  C# D  Eb E  F  F# G  G# A  Bb B ",8D,00
-                       asc          "   -- -- -- -- -- -- -- -- -- -- -- --",8D,00
-                       asc          "   25 23 21 1F 1E 1C 1A 19 17 16 15 13",8D,00
-                       asc          "   4B 47 43 3F 3C 38 35 32 2F 2D 2A 27",8D,00
-                       asc          "   96 8E 86 7E 77 71 6A 64 5E 59 54 4F",8D,00
-                       asc          "            FC EF E1 D5 C9 BD B3 A9 9F",00,00
-
-
-_strs_dialog_box       asc          " ___________________________________",8D,00
-                       asc          "|                                   |`",8D,00
-                       asc          "|                                   |`",8D,00
-                       asc          "|                                   |`",8D,00
-                       asc          "|                                   |`",8D,00
-                       asc          "|___________________________________|`",00,00
 
 
 _strs_note_board
@@ -976,28 +1133,44 @@ _strs_note_board
                        asc          "|___|___|___|___|___|___|___|___|___|`",8D,00
                        asc          " ``` ``` ``` ``` \\\ ``` ``` ``` ```",8D,00,00
 
+_strs_cheat_sheet      asc          "   C  C# D  Eb E  F  F# G  G# A  Bb B ",8D,00
+                       asc          "   -- -- -- -- -- -- -- -- -- -- -- --",8D,00
+                       asc          "   25 23 21 1F 1E 1C 1A 19 17 16 15 13",8D,00
+                       asc          "   4B 47 43 3F 3C 38 35 32 2F 2D 2A 27",8D,00
+                       asc          "   96 8E 86 7E 77 71 6A 64 5E 59 54 4F",8D,00
+                       asc          "            FC EF E1 D5 C9 BD B3 A9 9F",00,00
 
-_strs_help_screen      asc          " _____________  KSYNTHED _____________",8D,00
-                       asc          "|                                     |",8D,00
-                       asc          "| SONG CONTROL KEYS                   |",8D,00
-                       asc          "|                                     |",8D,00
-                       asc          "|  CTRL-P  =  PLAY SONG               |",8D,00
-                       asc          "|  CTRL-H  =  PLAY FROM HERE          |",8D,00
-                       asc          "|  CTRL-L  =  LOAD SONG               |",8D,00
-                       asc          "|  CTRL-S  =  SAVE SONG               |",8D,00
-                       asc          "|  CTRL-N  =  NEW SONG                |",8D,00
-                       asc          "|                                     |",8D,00
-                       asc          "| NOTE EDITOR KEYS                    |",8D,00
-                       asc          "|  L/R ARROW  =  MOVE CURSOR          |",8D,00
-                       asc          "|  SPACEBAR   =  PLAY NOTE            |",8D,00
-                       asc          "|  RETURN     =  EDIT NOTE            |",8D,00
-                       asc          "|  CTRL-I     =  INSERT NOTE          |",8D,00
-                       asc          "|  CTRL-D     =  DELETE NOTE          |",8D,00
-                       asc          "|  CTRL-C/V   =  COPY/PASTE NOTE      |",8D,00
-                       asc          "|                                     |",8D,00
-                       asc          "|                                     |",8D,00
-                       asc          "|  H or ?     = HELP SCREEN           |",8D,00
-                       asc          "|_____________________________________|",8D,00,00
+_strs_dialog_box       asc          " ___________________________________",8D,00
+                       asc          "|                                   |`",8D,00
+                       asc          "|                                   |`",8D,00
+                       asc          "|                                   |`",8D,00
+                       asc          "|                                   |`",8D,00
+                       asc          "|___________________________________|`",00,00
+
+
+_strs_help_screen      asc          " _____________  KSYNTHED  _____________",8D,00
+                       asc          "|                                      |",00
+                       asc          "| SONG CONTROL KEYS                    |",00
+                       asc          "|                                      |",00
+                       asc          "|  CTRL-P  =  PLAY SONG                |",00
+                       asc          "|       P  =  PLAY FROM HERE           |",00
+                       asc          "|  CTRL-L  =  LOAD SONG                |",00
+                       asc          "|  CTRL-S  =  SAVE SONG                |",00
+                       asc          "|  CTRL-N  =  NEW SONG                 |",00
+                       asc          "|                                      |",00
+                       asc          "| NOTE EDITOR KEYS                     |",00
+                       asc          "|  L/R ARROW  =  MOVE CURSOR           |",00
+                       asc          "|  SPACEBAR   =  PLAY NOTE             |",00
+                       asc          "|  RETURN     =  EDIT NOTE             |",00
+                       asc          "|  CTRL-I     =  INSERT NOTE           |",00
+                       asc          "|  CTRL-D     =  DELETE NOTE           |",00
+                       asc          "|  CTRL-C/V   =  COPY/PASTE NOTE       |",00
+                       asc          "|  CTRL-K     =  VIRTUAL KEYBOARD MODE |",00
+                       asc          "|  [ & ]      =  KEYBOARD OCTAVE       |",00
+                       asc          "|                                      |",00
+                       asc          "|  H or ?     =  HELP SCREEN           |",00
+                       asc          "|  CTRL-Q     =  QUIT                  |",00
+                       asc          "|______________________________________|",00,00
 
 
 ** This is the hash to match to "known" note values in the ks_note_str3_tbl
@@ -1007,6 +1180,17 @@ ks_valid_note_tbl
                        HEX          4F,54,59,5E,64,6A,71,77,7E,86,8E,96
                        HEX          9F,A9,B3,BD,C9,D5,E1,EF,FC,FF
 ks_valid_notes         =            *-ks_valid_note_tbl
+
+
+** This is the map for virtual keyboard octave notes
+vk_o4                  hex          25,23,21,1F,1E,1C,1A,19,17,16,15,13
+vk_o3                  hex          4B,47,43,3F,3C,38,35,32,2F,2D,2A,27
+vk_o2                  hex          96,8E,86,7E,77,71,6A,64,5E,59,54,4F
+vk_o1                  hex          00,00,00,FC,EF,E1,D5,C9,BD,B3,A9,9F
+vk_octave              db           2                                                     ; start at "middle" octave 2
+vk_mode                db           0                                                     ; modes 0=off, 10, 20, etc equals default delay
+vk_keymap              asc          "ZSXDCVGBHNJM",00
+
 
 ** These are the pointers to the actual string representations in ks_asc_13 .. ks_asc_FF
 ks_note_str3_tbl
@@ -1071,7 +1255,7 @@ ks_asc_UNKNOWN         asc          "-?-",00
 ks_asc_NONOTE          asc          "XXX",00
 ks_asc_NEGATIVE        asc          "***",00                                              ; really just for debugging visibility
 ks_asc_BLANK           asc          "   ",00
-
+ks_asc_OFF             asc          "OFF",00
 
 * Mostly for debugging, not intended for prod key handling
 WaitKey                lda          $c000

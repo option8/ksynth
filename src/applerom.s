@@ -82,6 +82,13 @@ VLINE        equ   $F828       ; Draws a vertical line of low-resolution blocks
 
 GSROM        equ   $FB59       ; should be int number of rom rev on Apple IIgs
 
+COMBYTE       equ  $E74C        ; Assembly Lines PDF describes on p147-148
+                                ; Checks TXTPTR for a comma and returns a value ($00-$FF) in X
+FRMNUM        equ  $DD67        ; Assembly Lines PDF describes on p149-150?
+                                ; EVAL formula
+CHKCOM    equ $DEBE             ;  Assembly Lines PDF describes on p149-150?
+GETADR        equ  $E752        ; Assembly Lines PDF describes on p149-150?
+LINNUM        equ  $50          ; APPLESOFT BASIC line number parse location for GETADR
 
 
 * KEY EQUATES
@@ -133,4 +140,3 @@ Lo21         equ   $650
 Lo22         equ   $6d0
 Lo23         equ   $750
 Lo24         equ   $7d0
-
